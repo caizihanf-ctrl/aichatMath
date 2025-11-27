@@ -910,6 +910,596 @@
 
     userInput.addEventListener('input', function() {
         this.style.height = 'auto';
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Math AI Chat</title>
+    
+    <!-- Markdown 解析 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <!-- 代码高亮 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+    <!-- MathJax 公式渲染 -->
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['[', ']']],
+                processEscapes: true
+            },
+            options: {
+                ignoreHtmlClass: 'tex2jax_ignore',
+                processHtmlClass: 'tex2jax_process'
+            },
+            startup: {
+                typeset: false
+            }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+
+    <style>
+        :root {
+            --bg-color: #f4f4f9;
+            --primary-color: #4a90e2;
+            --toolbar-bg: #eef2f5;
+            --border-color: #d1d5db;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* 顶部设置栏 */
+        .settings-header {
+            background: #2c3e50;
+            color: white;
+            padding: 10px 15px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        
+        .settings-panel {
+            background: #34495e;
+            padding: 10px;
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+            border-bottom: 1px solid #4a6278;
+            flex-shrink: 0;
+        }
+        
+        @media (min-width: 600px) {
+            .settings-panel {
+                flex-direction: row;
+                flex-wrap: wrap;
+            }
+        }
+
+        .settings-panel.show { display: flex; }
+
+        .settings-panel input {
+            background: #2c3e50;
+            border: 1px solid #5dade2;
+            color: white;
+            padding: 8px;
+            border-radius: 4px;
+            flex: 1;
+            min-width: 120px;
+            font-size: 0.9rem;
+        }
+
+        /* 模型选择器样式 */
+        .model-selector-group {
+            position: relative;
+            display: flex;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .model-selector-group input {
+            border-top-right-radius: 0;
+            border-bottom-right-radius: 0;
+            border-right: none;
+        }
+
+        .model-list-btn {
+            background: #2980b9;
+            border: 1px solid #5dade2;
+            color: white;
+            padding: 0 12px;
+            cursor: pointer;
+            border-top-right-radius: 4px;
+            border-bottom-right-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .model-list-btn:hover { background: #3498db; }
+        .model-list-btn:active { background: #1f618d; }
+
+        /* 模型下拉列表 */
+        .model-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #2c3e50;
+            border: 1px solid #5dade2;
+            border-radius: 4px;
+            max-height: 250px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            margin-top: 2px;
+        }
+
+        .model-dropdown.show { display: block; }
+
+        .model-option {
+            padding: 8px 12px;
+            color: #ecf0f1;
+            cursor: pointer;
+            font-size: 0.9rem;
+            border-bottom: 1px solid #34495e;
+        }
+
+        .model-option:last-child { border-bottom: none; }
+        .model-option:hover { background: #34495e; color: #5dade2; }
+        .model-option.loading { text-align: center; color: #bdc3c7; cursor: default; }
+        .model-option.error { color: #e74c3c; font-size: 0.8rem; }
+
+        .model-dropdown::-webkit-scrollbar { width: 6px; }
+        .model-dropdown::-webkit-scrollbar-thumb { background: #5dade2; border-radius: 3px; }
+        .model-dropdown::-webkit-scrollbar-track { background: #2c3e50; }
+
+        /* 按钮通用样式 */
+        .action-btn {
+            padding: 8px 15px;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+
+        .save-btn { background: #27ae60; }
+        .save-btn:hover { background: #2ecc71; }
+
+        .export-btn { background: #e67e22; }
+        .export-btn:hover { background: #d35400; }
+
+        /* 聊天区域 */
+        #chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .message {
+            max-width: 90%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            line-height: 1.6;
+            word-wrap: break-word;
+            font-size: 0.95rem;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .message.user {
+            align-self: flex-end;
+            background-color: var(--primary-color);
+            color: white;
+            border-bottom-right-radius: 2px;
+        }
+
+        .message.ai {
+            align-self: flex-start;
+            background-color: white;
+            color: #333;
+            border-bottom-left-radius: 2px;
+            border: 1px solid var(--border-color);
+        }
+
+        /* 底部区域容器 */
+        .bottom-section {
+            background: white;
+            border-top: 1px solid var(--border-color);
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 数学符号工具栏 */
+        .math-toolbar-container {
+            background-color: var(--toolbar-bg);
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .math-toolbar-row {
+            display: flex;
+            gap: 8px;
+            padding: 6px 10px;
+            overflow-x: auto;
+            white-space: nowrap;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+        
+        /* 给第一行加个分割线，视觉上区分 */
+        .math-toolbar-row:first-child {
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .math-toolbar-row::-webkit-scrollbar { display: none; }
+
+        .math-btn {
+            background: white;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 0.9rem;
+            font-family: Consolas, "Times New Roman", serif;
+            cursor: pointer;
+            user-select: none;
+            color: #334155;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            transition: all 0.1s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 32px; /* 保证小符号好点 */
+        }
+
+        .math-btn:active {
+            background-color: #e2e8f0;
+            transform: translateY(1px);
+        }
+        
+        .math-btn span { pointer-events: none; }
+
+        /* 输入区域 */
+        .input-area {
+            display: flex;
+            padding: 10px;
+            gap: 10px;
+            align-items: flex-end;
+            background: white;
+        }
+
+        textarea {
+            flex: 1;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 1rem;
+            resize: none;
+            height: 44px;
+            max-height: 120px;
+            outline: none;
+            font-family: inherit;
+        }
+
+        textarea:focus { border-color: var(--primary-color); }
+
+        button#send-btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0 20px;
+            height: 44px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        
+        button#send-btn:disabled { background-color: #94a3b8; }
+
+        .message.ai pre { background: #2d2d2d; color: #f8f8f2; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        .message.ai p { margin: 0 0 8px 0; }
+        .message.ai p:last-child { margin: 0; }
+        
+        * { touch-action: manipulation; }
+    </style>
+</head>
+<body>
+
+<!-- 顶部设置 (可折叠) -->
+<div class="settings-header" onclick="toggleSettings()">
+    <span>⚙️ 设置与 API Key</span>
+    <span id="toggle-icon">▼</span>
+</div>
+<div class="settings-panel" id="settings-panel">
+    <input type="text" id="api-url" placeholder="API 地址 (如 https://api.openai.com/v1)">
+    <input type="password" id="api-key" placeholder="API Key (sk-...)">
+    
+    <!-- 模型选择区域 -->
+    <div class="model-selector-group">
+        <input type="text" id="model-name" placeholder="模型 (如 gpt-4o, deepseek-chat)">
+        <button class="model-list-btn" onclick="fetchAndShowModels(event)" title="获取模型列表">▼</button>
+        <div id="model-dropdown" class="model-dropdown">
+            <!-- 模型列表将在这里生成 -->
+        </div>
+    </div>
+
+    <button class="action-btn save-btn" onclick="saveSettings()">保存配置</button>
+    <!-- 新增：导出对话按钮 -->
+    <button class="action-btn export-btn" onclick="exportChat()">导出对话</button>
+</div>
+
+<!-- 聊天内容 -->
+<div id="chat-container">
+    <div class="message ai">
+        你好！我是你的数学助手。
+        <br>点击下方的工具栏可以快速输入数学符号，我会自动渲染公式。
+        <br>例如：$\int_{0}^{\pi} \sin(x) dx = 2$
+    </div>
+</div>
+
+<!-- 底部区域：工具栏 + 输入框 -->
+<div class="bottom-section">
+    <div class="math-toolbar-container">
+        <!-- 第一行：基础符号 -->
+        <div class="math-toolbar-row" id="math-toolbar-basic"></div>
+        <!-- 第二行：高级函数 -->
+        <div class="math-toolbar-row" id="math-toolbar-funcs"></div>
+    </div>
+
+    <div class="input-area">
+        <textarea id="user-input" placeholder="输入数学问题..." rows="1"></textarea>
+        <button id="send-btn" onclick="sendMessage()">发送</button>
+    </div>
+</div>
+
+<script>
+    // --- 1. 数学符号配置 ---
+    
+    // 新增的基础符号
+    const basicSymbols = [
+        { label: '+', insert: '+', offset: 0 },
+        { label: '-', insert: '-', offset: 0 },
+        { label: '*', insert: '*', offset: 0 }, // 输入 *，AI 通常能识别为乘法
+        { label: '/', insert: '/', offset: 0 },
+        { label: '=', insert: '=', offset: 0 },
+        { label: '%', insert: '%', offset: 0 },
+        { label: '(', insert: '(', offset: 0 },
+        { label: ')', insert: ')', offset: 0 },
+        { label: '^', insert: '^', offset: 0 },
+        { label: '→', insert: '\\to ', offset: 0 } // 箭头通常用 LaTeX
+    ];
+
+    // 原有的高级符号
+    const funcSymbols = [
+        { label: 'x²', insert: '^{2}', offset: 0 },
+        { label: 'xⁿ', insert: '^{}', offset: 1 },
+        { label: '√', insert: '\\sqrt{}', offset: 1 },
+        { label: 'ⁿ√', insert: '\\sqrt[]{}', offset: 3 },
+        { label: 'frac', insert: '\\frac{}{}', offset: 3 },
+        { label: 'sin', insert: '\\sin()', offset: 1 },
+        { label: 'cos', insert: '\\cos()', offset: 1 },
+        { label: 'tan', insert: '\\tan()', offset: 1 },
+        { label: 'ln', insert: '\\ln()', offset: 1 },
+        { label: 'log', insert: '\\log_{}{}', offset: 3 },
+        { label: 'eˣ', insert: 'e^{}', offset: 1 },
+        { label: 'π', insert: '\\pi', offset: 0 },
+        { label: 'θ', insert: '\\theta', offset: 0 },
+        { label: '∞', insert: '\\infty', offset: 0 },
+        { label: '∫', insert: '\\int ', offset: 0 },
+        { label: '∫ab', insert: '\\int_{}^{}', offset: 3 },
+        { label: 'dx', insert: 'dx', offset: 0 },
+        { label: 'd/dx', insert: '\\frac{d}{dx}', offset: 0 },
+        { label: '∂', insert: '\\partial', offset: 0 },
+        { label: '∑', insert: '\\sum_{}^{}', offset: 3 },
+        { label: 'lim', insert: '\\lim_{ \\to }', offset: 4 },
+        { label: '≤', insert: '\\le', offset: 0 },
+        { label: '≥', insert: '\\ge', offset: 0 },
+        { label: '≈', insert: '\\approx', offset: 0 },
+        { label: '≠', insert: '\\ne', offset: 0 },
+        { label: '∵', insert: '\\because', offset: 0 },
+        { label: '∴', insert: '\\therefore', offset: 0 }
+    ];
+
+    // --- 2. 初始化逻辑 ---
+    const chatContainer = document.getElementById('chat-container');
+    const userInput = document.getElementById('user-input');
+    
+    // 渲染工具栏的辅助函数
+    function renderToolbar(containerId, symbols) {
+        const container = document.getElementById(containerId);
+        symbols.forEach(sym => {
+            const btn = document.createElement('div');
+            btn.className = 'math-btn';
+            btn.textContent = sym.label;
+            btn.onmousedown = (e) => e.preventDefault(); 
+            btn.onclick = () => insertSymbol(sym.insert, sym.offset);
+            container.appendChild(btn);
+        });
+    }
+
+    // 渲染两行工具栏
+    renderToolbar('math-toolbar-basic', basicSymbols);
+    renderToolbar('math-toolbar-funcs', funcSymbols);
+
+    function insertSymbol(text, offsetBack) {
+        const start = userInput.selectionStart;
+        const end = userInput.selectionEnd;
+        const value = userInput.value;
+        userInput.value = value.substring(0, start) + text + value.substring(end);
+        const newPos = start + text.length - offsetBack;
+        userInput.setSelectionRange(newPos, newPos);
+        userInput.focus();
+        userInput.dispatchEvent(new Event('input'));
+    }
+
+    // --- 3. 聊天与 API 逻辑 ---
+    const defaultUrl = "https://api.openai.com/v1";
+    const defaultModel = "gpt-3.5-turbo";
+    let messageHistory = [];
+
+    window.onload = () => {
+        document.getElementById('api-url').value = localStorage.getItem('api_url') || '';
+        document.getElementById('api-key').value = localStorage.getItem('api_key') || '';
+        document.getElementById('model-name').value = localStorage.getItem('model_name') || defaultModel;
+        
+        marked.setOptions({
+            highlight: (code, lang) => highlight.highlight(code, { language: highlight.getLanguage(lang) ? lang : 'plaintext' }).value
+        });
+
+        document.addEventListener('click', (e) => {
+            const dropdown = document.getElementById('model-dropdown');
+            const btn = document.querySelector('.model-list-btn');
+            if (!dropdown.contains(e.target) && e.target !== btn) {
+                dropdown.classList.remove('show');
+            }
+        });
+    };
+
+    function toggleSettings() {
+        const panel = document.getElementById('settings-panel');
+        const icon = document.getElementById('toggle-icon');
+        if (panel.style.display === 'flex') {
+            panel.style.display = 'none';
+            icon.textContent = '▼';
+        } else {
+            panel.style.display = 'flex';
+            icon.textContent = '▲';
+        }
+    }
+
+    function saveSettings() {
+        localStorage.setItem('api_url', document.getElementById('api-url').value);
+        localStorage.setItem('api_key', document.getElementById('api-key').value);
+        localStorage.setItem('model_name', document.getElementById('model-name').value);
+        alert('配置已保存');
+        const panel = document.getElementById('settings-panel');
+        if(panel.style.display === 'flex') toggleSettings();
+    }
+
+    // --- 新增：导出对话功能 ---
+    function exportChat() {
+        if (messageHistory.length === 0) {
+            alert('暂无对话记录可导出');
+            return;
+        }
+        
+        // 创建 JSON 数据
+        const dataStr = JSON.stringify(messageHistory, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        
+        // 创建下载链接
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        
+        // 生成文件名：math_chat_日期.json
+        const date = new Date();
+        const timestamp = date.toISOString().slice(0,19).replace(/[-T:]/g,"");
+        a.download = `math_chat_${timestamp}.json`;
+        
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    // 获取模型列表逻辑
+    async function fetchAndShowModels(event) {
+        event.stopPropagation();
+        const dropdown = document.getElementById('model-dropdown');
+        const apiKey = document.getElementById('api-key').value.trim();
+        let apiUrl = document.getElementById('api-url').value.trim() || defaultUrl;
+
+        if (dropdown.classList.contains('show')) {
+            dropdown.classList.remove('show');
+            return;
+        }
+
+        if (!apiKey) {
+            alert('请先填写 API Key');
+            return;
+        }
+
+        dropdown.classList.add('show');
+        dropdown.innerHTML = '<div class="model-option loading">正在获取模型列表...</div>';
+
+        try {
+            if (apiUrl.endsWith('/chat/completions')) {
+                apiUrl = apiUrl.replace('/chat/completions', '');
+            }
+            if (apiUrl.endsWith('/')) {
+                apiUrl = apiUrl.slice(0, -1);
+            }
+            const modelsUrl = `${apiUrl}/models`;
+
+            const response = await fetch(modelsUrl, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP Error: ${response.status}`);
+            }
+
+            const data = await response.json();
+            const models = Array.isArray(data.data) ? data.data : (Array.isArray(data) ? data : []);
+            models.sort((a, b) => a.id.localeCompare(b.id));
+
+            dropdown.innerHTML = '';
+
+            if (models.length === 0) {
+                dropdown.innerHTML = '<div class="model-option error">未找到模型</div>';
+                return;
+            }
+
+            models.forEach(model => {
+                const div = document.createElement('div');
+                div.className = 'model-option';
+                div.textContent = model.id;
+                div.onclick = () => {
+                    document.getElementById('model-name').value = model.id;
+                    dropdown.classList.remove('show');
+                };
+                dropdown.appendChild(div);
+            });
+
+        } catch (error) {
+            dropdown.innerHTML = `<div class="model-option error">获取失败: ${error.message}<br>请检查 URL 和 Key</div>`;
+        }
+    }
+
+    userInput.addEventListener('input', function() {
+        this.style.height = 'auto';
         this.style.height = (this.scrollHeight) + 'px';
         if(this.value === '') this.style.height = '44px';
     });
