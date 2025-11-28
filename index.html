@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Math AI Chat</title>
+    <title>Math AI Chat (Load & Save)</title>
     
     <!-- Markdown 解析 -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -82,7 +82,8 @@
 
         .settings-panel.show { display: flex; }
 
-        .settings-panel input {
+        .settings-panel input[type="text"], 
+        .settings-panel input[type="password"] {
             background: #2c3e50;
             border: 1px solid #5dade2;
             color: white;
@@ -169,6 +170,10 @@
             cursor: pointer;
             font-weight: bold;
             white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            justify-content: center;
         }
 
         .save-btn { background: #27ae60; }
@@ -176,6 +181,23 @@
 
         .export-btn { background: #e67e22; }
         .export-btn:hover { background: #d35400; }
+
+        .autosave-btn { background: #8e44ad; }
+        .autosave-btn:hover { background: #9b59b6; }
+        .autosave-btn.active { background: #2ecc71; pointer-events: none; }
+
+        /* 新增：加载按钮样式 */
+        .import-btn { background: #16a085; }
+        .import-btn:hover { background: #1abc9c; }
+        
+        .status-indicator {
+            font-size: 0.8rem;
+            margin-left: 10px;
+            color: #bdc3c7;
+            display: flex;
+            align-items: center;
+        }
+        .status-indicator.recording { color: #2ecc71; }
 
         /* 聊天区域 */
         #chat-container {
@@ -224,7 +246,7 @@
             position: relative; /* 为了定位预览区 */
         }
 
-        /* ======== 新增：实时预览区样式 ======== */
+        /* 实时预览区样式 */
         .math-preview-area {
             background: #fffdf5; /* 淡淡的黄色背景，区分输入区 */
             border-bottom: 1px solid #e0e0e0;
@@ -248,7 +270,6 @@
             from { opacity: 0; transform: translateY(5px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        /* ====================================== */
 
         /* 数学符号工具栏 */
         .math-toolbar-container {
@@ -348,7 +369,10 @@
 
 <!-- 顶部设置 (可折叠) -->
 <div class="settings-header" onclick="toggleSettings()">
-    <span>⚙️ 设置与 API Key</span>
+    <div style="display:flex; align-items:center;">
+        <span>⚙️ 设置与 API Key</span>
+        <span id="autosave-status" class="status-indicator"></span>
+    </div>
     <span id="toggle-icon">▼</span>
 </div>
 <div class="settings-panel" id="settings-panel">
@@ -359,12 +383,22 @@
     <div class="model-selector-group">
         <input type="text" id="model-name" placeholder="模型 (如 gpt-4o, deepseek-chat)">
         <button class="model-list-btn" onclick="fetchAndShowModels(event)" title="获取模型列表">▼</button>
-        <div id="model-dropdown" class="model-dropdown">
-            <!-- 模型列表将在这里生成 -->
-        </div>
+        <div id="model-dropdown" class="model-dropdown"></div>
     </div>
 
     <button class="action-btn save-btn" onclick="saveSettings()">保存配置</button>
+    
+    <!-- 自动保存按钮 -->
+    <button id="btn-autosave" class="action-btn autosave-btn" onclick="setupAutoSave()">
+        <span>📂</span> 启用自动保存
+    </button>
+    
+    <!-- 新增：加载对话按钮 (触发隐藏的 file input) -->
+    <input type="file" id="import-file" accept=".json" style="display:none" onchange="handleFileImport(this)">
+    <button class="action-btn import-btn" onclick="document.getElementById('import-file').click()">
+        <span>📥</span> 加载对话
+    </button>
+
     <button class="action-btn export-btn" onclick="exportChat()">导出对话</button>
 </div>
 
@@ -373,13 +407,13 @@
     <div class="message ai">
         你好！我是你的数学助手。
         <br>点击下方的工具栏可以快速输入数学符号，我会自动渲染公式。
-        <br>例如：$\int_{0}^{\pi} \sin(x) dx = 2$
+        <br><b>提示：</b>你现在可以点击设置栏中的“加载对话”来恢复之前的聊天记录。
     </div>
 </div>
 
 <!-- 底部区域：预览区 + 工具栏 + 输入框 -->
 <div class="bottom-section">
-    <!-- 新增：实时预览区 -->
+    <!-- 实时预览区 -->
     <div id="math-preview" class="math-preview-area"></div>
 
     <div class="math-toolbar-container">
@@ -472,13 +506,17 @@
         const newPos = start + text.length - offsetBack;
         userInput.setSelectionRange(newPos, newPos);
         userInput.focus();
-        userInput.dispatchEvent(new Event('input')); // 触发输入事件以更新预览
+        userInput.dispatchEvent(new Event('input')); 
     }
 
     // --- 3. 聊天与 API 逻辑 ---
     const defaultUrl = "https://api.openai.com/v1";
     const defaultModel = "gpt-3.5-turbo";
     let messageHistory = [];
+    
+    // --- 自动保存相关变量 ---
+    let fileHandle = null;
+    let isAutoSaveActive = false;
 
     window.onload = () => {
         document.getElementById('api-url').value = localStorage.getItem('api_url') || '';
@@ -519,6 +557,121 @@
         if(panel.style.display === 'flex') toggleSettings();
     }
 
+    // --- 自动保存功能 ---
+    async function setupAutoSave() {
+        if (!('showDirectoryPicker' in window)) {
+            alert('您的浏览器不支持文件系统访问 API。请使用 Chrome/Edge 桌面版。');
+            return;
+        }
+
+        try {
+            const dirHandle = await window.showDirectoryPicker();
+            const now = new Date();
+            const timestamp = now.getFullYear() +
+                String(now.getMonth() + 1).padStart(2, '0') +
+                String(now.getDate()).padStart(2, '0') + '_' +
+                String(now.getHours()).padStart(2, '0') +
+                String(now.getMinutes()).padStart(2, '0') +
+                String(now.getSeconds()).padStart(2, '0');
+            const fileName = `chat_${timestamp}.json`;
+
+            fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
+            
+            isAutoSaveActive = true;
+            const btn = document.getElementById('btn-autosave');
+            btn.innerHTML = `<span>✅</span> ${fileName}`;
+            btn.classList.add('active');
+            
+            const status = document.getElementById('autosave-status');
+            status.textContent = "● 正在记录";
+            status.classList.add('recording');
+
+            await writeToFile();
+            alert(`自动保存已开启！文件: ${fileName}`);
+
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                console.error(err);
+                alert('设置自动保存失败: ' + err.message);
+            }
+        }
+    }
+
+    async function writeToFile() {
+        if (!fileHandle || !isAutoSaveActive) return;
+        try {
+            const writable = await fileHandle.createWritable();
+            await writable.write(JSON.stringify(messageHistory, null, 2));
+            await writable.close();
+        } catch (err) {
+            console.error('自动保存写入失败:', err);
+            const status = document.getElementById('autosave-status');
+            status.textContent = "● 保存失败";
+            status.style.color = "red";
+        }
+    }
+
+    // --- 新增：加载对话功能 ---
+    function handleFileImport(input) {
+        const file = input.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const loadedHistory = JSON.parse(e.target.result);
+                
+                if (!Array.isArray(loadedHistory)) {
+                    throw new Error("文件格式错误：内容不是数组");
+                }
+
+                // 1. 清空当前界面
+                chatContainer.innerHTML = '';
+                messageHistory = [];
+
+                // 2. 遍历并渲染消息
+                loadedHistory.forEach(msg => {
+                    if (!msg.role || !msg.content) return;
+                    
+                    messageHistory.push(msg);
+                    
+                    let contentHtml = "";
+                    if (msg.role === 'assistant') {
+                        // AI 消息需要 Markdown 解析
+                        contentHtml = marked.parse(msg.content);
+                    } else {
+                        // 用户消息通常是纯文本，但也可能包含 LaTeX
+                        // 简单转义 HTML 标签防止 XSS，但保留 LaTeX 符号
+                        contentHtml = msg.content.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                    }
+                    
+                    appendMessage(msg.role === 'assistant' ? 'ai' : 'user', contentHtml);
+                });
+
+                // 3. 重新渲染所有数学公式
+                MathJax.typesetPromise([chatContainer]).then(() => {
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                });
+
+                // 4. 如果开启了自动保存，立即将加载的内容写入当前自动保存文件
+                if (isAutoSaveActive) {
+                    writeToFile();
+                }
+
+                alert(`成功加载 ${loadedHistory.length} 条消息`);
+                
+                // 关闭设置面板
+                const panel = document.getElementById('settings-panel');
+                if(panel.style.display === 'flex') toggleSettings();
+
+            } catch (err) {
+                alert("加载失败: " + err.message);
+            }
+        };
+        reader.readAsText(file);
+        input.value = ''; // 重置 input，允许重复选择同一文件
+    }
+
     function exportChat() {
         if (messageHistory.length === 0) {
             alert('暂无对话记录可导出');
@@ -531,7 +684,7 @@
         a.href = url;
         const date = new Date();
         const timestamp = date.toISOString().slice(0,19).replace(/[-T:]/g,"");
-        a.download = `math_chat_${timestamp}.json`;
+        a.download = `math_chat_export_${timestamp}.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -605,7 +758,6 @@
         }
     }
 
-    // --- 新增：防抖函数，防止输入时频繁渲染卡顿 ---
     function debounce(func, wait) {
         let timeout;
         return function(...args) {
@@ -614,42 +766,28 @@
         };
     }
 
-    // --- 新增：渲染预览逻辑 ---
-    let renderPromise = Promise.resolve(); // 用于串行化 MathJax 渲染任务
+    let renderPromise = Promise.resolve();
 
     const updatePreview = debounce(function() {
         const text = userInput.value;
-        
-        // 如果输入为空，隐藏预览区
         if (!text.trim()) {
             previewArea.classList.remove('show');
             return;
         }
-
-        // 显示预览区
         previewArea.classList.add('show');
-        
-        // 1. 先用 marked 解析 Markdown (处理普通文本格式)
-        // 注意：我们只渲染文本，不执行高亮，以保持预览轻量
         previewArea.innerHTML = marked.parse(text);
-
-        // 2. 调用 MathJax 渲染 LaTeX
-        // 使用 Promise 链确保上一次渲染完成后再进行下一次，防止崩溃
         renderPromise = renderPromise.then(() => {
             return MathJax.typesetPromise([previewArea]);
         }).catch((err) => {
             console.log('MathJax render error: ', err);
         });
 
-    }, 300); // 延迟 300ms 执行
+    }, 300);
 
     userInput.addEventListener('input', function() {
-        // 自动调整高度
         this.style.height = 'auto';
         this.style.height = (this.scrollHeight) + 'px';
         if(this.value === '') this.style.height = '44px';
-        
-        // 触发预览更新
         updatePreview();
     });
 
@@ -672,15 +810,16 @@
         if (apiUrl.endsWith('/')) apiUrl = apiUrl.slice(0, -1);
         if (!apiUrl.endsWith('/chat/completions')) apiUrl += '/chat/completions';
 
-        appendMessage('user', text);
+        appendMessage('user', text); // 用户消息直接显示文本，appendMessage 内部会处理
         
-        // 发送后清空输入框和预览区
         userInput.value = '';
         userInput.style.height = '44px';
         previewArea.classList.remove('show');
         previewArea.innerHTML = '';
         
         messageHistory.push({ role: "user", content: text });
+        
+        await writeToFile();
 
         const aiMessageDiv = appendMessage('ai', '<span class="typing">思考中...</span>');
         const sendBtn = document.getElementById('send-btn');
@@ -722,6 +861,9 @@
             }
 
             messageHistory.push({ role: "assistant", content: fullText });
+            
+            await writeToFile();
+
             aiMessageDiv.innerHTML = marked.parse(fullText);
             MathJax.typesetPromise([aiMessageDiv]).then(() => {
                 chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -740,7 +882,7 @@
         div.innerHTML = html;
         chatContainer.appendChild(div);
         chatContainer.scrollTop = chatContainer.scrollHeight;
-        // 对用户发送的消息也进行一次渲染（如果用户手动输入了LaTeX）
+        // 仅对用户消息进行 MathJax 渲染（AI 消息在流式传输结束后统一渲染）
         if (role === 'user') {
              MathJax.typesetPromise([div]);
         }
