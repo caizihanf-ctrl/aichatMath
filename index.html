@@ -221,7 +221,34 @@
             flex-shrink: 0;
             display: flex;
             flex-direction: column;
+            position: relative; /* 为了定位预览区 */
         }
+
+        /* ======== 新增：实时预览区样式 ======== */
+        .math-preview-area {
+            background: #fffdf5; /* 淡淡的黄色背景，区分输入区 */
+            border-bottom: 1px solid #e0e0e0;
+            padding: 8px 15px;
+            font-size: 0.9rem;
+            color: #555;
+            max-height: 120px;
+            overflow-y: auto;
+            display: none; /* 默认隐藏 */
+            box-shadow: inset 0 -2px 4px rgba(0,0,0,0.02);
+        }
+
+        .math-preview-area.show {
+            display: block;
+            animation: fadeIn 0.2s ease-in-out;
+        }
+        
+        .math-preview-area p { margin: 0; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        /* ====================================== */
 
         /* 数学符号工具栏 */
         .math-toolbar-container {
@@ -241,7 +268,6 @@
             scrollbar-width: none;
         }
         
-        /* 给第一行加个分割线，视觉上区分 */
         .math-toolbar-row:first-child {
             border-bottom: 1px solid #e2e8f0;
         }
@@ -263,7 +289,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            min-width: 32px; /* 保证小符号好点 */
+            min-width: 32px;
         }
 
         .math-btn:active {
@@ -339,7 +365,6 @@
     </div>
 
     <button class="action-btn save-btn" onclick="saveSettings()">保存配置</button>
-    <!-- 新增：导出对话按钮 -->
     <button class="action-btn export-btn" onclick="exportChat()">导出对话</button>
 </div>
 
@@ -352,8 +377,11 @@
     </div>
 </div>
 
-<!-- 底部区域：工具栏 + 输入框 -->
+<!-- 底部区域：预览区 + 工具栏 + 输入框 -->
 <div class="bottom-section">
+    <!-- 新增：实时预览区 -->
+    <div id="math-preview" class="math-preview-area"></div>
+
     <div class="math-toolbar-container">
         <!-- 第一行：基础符号 -->
         <div class="math-toolbar-row" id="math-toolbar-basic"></div>
@@ -370,22 +398,21 @@
 <script>
     // --- 1. 数学符号配置 ---
     
-    // 新增的基础符号
     const basicSymbols = [
         { label: '+', insert: '+', offset: 0 },
         { label: '-', insert: '-', offset: 0 },
-        { label: '*', insert: '*', offset: 0 }, // 输入 *，AI 通常能识别为乘法
+        { label: '*', insert: '*', offset: 0 },
         { label: '/', insert: '/', offset: 0 },
         { label: '=', insert: '=', offset: 0 },
         { label: '%', insert: '%', offset: 0 },
         { label: '(', insert: '(', offset: 0 },
         { label: ')', insert: ')', offset: 0 },
         { label: '^', insert: '^', offset: 0 },
-        { label: '→', insert: '\\to ', offset: 0 } // 箭头通常用 LaTeX
+        { label: '→', insert: '\\to ', offset: 0 }
     ];
 
-    // 原有的高级符号
     const funcSymbols = [
+        { label: '$', insert: '$', offset: 0},
         { label: 'x²', insert: '^{2}', offset: 0 },
         { label: 'xⁿ', insert: '^{}', offset: 1 },
         { label: '√', insert: '\\sqrt{}', offset: 1 },
@@ -418,8 +445,8 @@
     // --- 2. 初始化逻辑 ---
     const chatContainer = document.getElementById('chat-container');
     const userInput = document.getElementById('user-input');
+    const previewArea = document.getElementById('math-preview');
     
-    // 渲染工具栏的辅助函数
     function renderToolbar(containerId, symbols) {
         const container = document.getElementById(containerId);
         symbols.forEach(sym => {
@@ -432,7 +459,6 @@
         });
     }
 
-    // 渲染两行工具栏
     renderToolbar('math-toolbar-basic', basicSymbols);
     renderToolbar('math-toolbar-funcs', funcSymbols);
 
@@ -444,7 +470,7 @@
         const newPos = start + text.length - offsetBack;
         userInput.setSelectionRange(newPos, newPos);
         userInput.focus();
-        userInput.dispatchEvent(new Event('input'));
+        userInput.dispatchEvent(new Event('input')); // 触发输入事件以更新预览
     }
 
     // --- 3. 聊天与 API 逻辑 ---
@@ -491,34 +517,25 @@
         if(panel.style.display === 'flex') toggleSettings();
     }
 
-    // --- 新增：导出对话功能 ---
     function exportChat() {
         if (messageHistory.length === 0) {
             alert('暂无对话记录可导出');
             return;
         }
-        
-        // 创建 JSON 数据
         const dataStr = JSON.stringify(messageHistory, null, 2);
         const blob = new Blob([dataStr], { type: 'application/json' });
-        
-        // 创建下载链接
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        
-        // 生成文件名：math_chat_日期.json
         const date = new Date();
         const timestamp = date.toISOString().slice(0,19).replace(/[-T:]/g,"");
         a.download = `math_chat_${timestamp}.json`;
-        
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     }
 
-    // 获取模型列表逻辑
     async function fetchAndShowModels(event) {
         event.stopPropagation();
         const dropdown = document.getElementById('model-dropdown');
@@ -586,10 +603,52 @@
         }
     }
 
+    // --- 新增：防抖函数，防止输入时频繁渲染卡顿 ---
+    function debounce(func, wait) {
+        let timeout;
+        return function(...args) {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(this, args), wait);
+        };
+    }
+
+    // --- 新增：渲染预览逻辑 ---
+    let renderPromise = Promise.resolve(); // 用于串行化 MathJax 渲染任务
+
+    const updatePreview = debounce(function() {
+        const text = userInput.value;
+        
+        // 如果输入为空，隐藏预览区
+        if (!text.trim()) {
+            previewArea.classList.remove('show');
+            return;
+        }
+
+        // 显示预览区
+        previewArea.classList.add('show');
+        
+        // 1. 先用 marked 解析 Markdown (处理普通文本格式)
+        // 注意：我们只渲染文本，不执行高亮，以保持预览轻量
+        previewArea.innerHTML = marked.parse(text);
+
+        // 2. 调用 MathJax 渲染 LaTeX
+        // 使用 Promise 链确保上一次渲染完成后再进行下一次，防止崩溃
+        renderPromise = renderPromise.then(() => {
+            return MathJax.typesetPromise([previewArea]);
+        }).catch((err) => {
+            console.log('MathJax render error: ', err);
+        });
+
+    }, 300); // 延迟 300ms 执行
+
     userInput.addEventListener('input', function() {
+        // 自动调整高度
         this.style.height = 'auto';
         this.style.height = (this.scrollHeight) + 'px';
         if(this.value === '') this.style.height = '44px';
+        
+        // 触发预览更新
+        updatePreview();
     });
 
     userInput.addEventListener('keydown', function(e) {
@@ -612,8 +671,13 @@
         if (!apiUrl.endsWith('/chat/completions')) apiUrl += '/chat/completions';
 
         appendMessage('user', text);
+        
+        // 发送后清空输入框和预览区
         userInput.value = '';
         userInput.style.height = '44px';
+        previewArea.classList.remove('show');
+        previewArea.innerHTML = '';
+        
         messageHistory.push({ role: "user", content: text });
 
         const aiMessageDiv = appendMessage('ai', '<span class="typing">思考中...</span>');
@@ -674,6 +738,10 @@
         div.innerHTML = html;
         chatContainer.appendChild(div);
         chatContainer.scrollTop = chatContainer.scrollHeight;
+        // 对用户发送的消息也进行一次渲染（如果用户手动输入了LaTeX）
+        if (role === 'user') {
+             MathJax.typesetPromise([div]);
+        }
         return div;
     }
 </script>
