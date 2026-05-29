@@ -773,8 +773,8 @@
 
         <div class="settings-row">
             <div class="settings-group">
-                <label for="nutstore-url">坚果云 WebDAV/MCP 地址</label>
-                <input type="text" id="nutstore-url" placeholder="https://dav.jianguoyun.com/dav/">
+                <label for="nutstore-url">坚果云 WebDAV 中转地址</label>
+                <input type="text" id="nutstore-url" placeholder="https://zihancai.top/dav/">
             </div>
             <div class="settings-group">
                 <label for="nutstore-user">坚果云账号</label>
@@ -791,7 +791,7 @@
         </div>
 
         <div class="setting-note">
-            已暴露浏览器端 MCP 桥接对象：window.MathChatMCP。坚果云同步使用 WebDAV；如果浏览器因 CORS 拦截，请用同源 MCP/WebDAV 代理转发。
+            当前默认通过 zihancai.top 的 nginx WebDAV 反代与坚果云同步；坚果云账号和应用密码仍填写原来的坚果云凭据。
         </div>
 
         <div class="settings-row">
@@ -800,6 +800,7 @@
                 启用坚果云自动同步
             </label>
             <button class="action-btn save-btn" onclick="saveSettings()">保存配置</button>
+            <button class="action-btn sync-btn" onclick="useNutstoreProxy()">使用中转服务器</button>
             <button id="btn-autosave" class="action-btn autosave-btn" onclick="setupAutoSave()">启用本地自动保存</button>
             <input type="file" id="import-file" accept=".json,application/json" style="display:none" onchange="handleFileImport(this)">
             <button class="action-btn import-btn" onclick="document.getElementById('import-file').click()">加载对话</button>
@@ -862,7 +863,12 @@
 
         const defaultUrl = 'https://api.openai.com/v1';
         const defaultModel = 'gpt-4o';
-        const defaultNutstoreUrl = 'https://dav.jianguoyun.com/dav/';
+        const directNutstoreUrl = 'https://dav.jianguoyun.com/dav/';
+        const legacyProxyNutstoreUrl = 'http://47.237.92.156/dav/';
+        const proxyNutstoreHost = 'zihancai.top';
+        const proxyNutstorePath = '/dav/';
+        const proxyNutstoreUrl = getProxyNutstoreUrl();
+        const defaultNutstoreUrl = proxyNutstoreUrl;
         const defaultNutstorePath = '/MathAIChat/chat.json';
         const maxImageBytes = 8 * 1024 * 1024;
 
@@ -935,7 +941,10 @@
             document.getElementById('api-key').value = localStorage.getItem(STORAGE_KEYS.apiKey) || '';
             document.getElementById('model-name').value = localStorage.getItem(STORAGE_KEYS.modelName) || defaultModel;
             document.getElementById('api-list').value = localStorage.getItem(STORAGE_KEYS.apiList) || '';
-            document.getElementById('nutstore-url').value = localStorage.getItem(STORAGE_KEYS.nutstoreUrl) || defaultNutstoreUrl;
+            const savedNutstoreUrl = localStorage.getItem(STORAGE_KEYS.nutstoreUrl);
+            document.getElementById('nutstore-url').value = (!savedNutstoreUrl || isDirectNutstoreUrl(savedNutstoreUrl) || isLegacyProxyNutstoreUrl(savedNutstoreUrl))
+                ? defaultNutstoreUrl
+                : savedNutstoreUrl;
             document.getElementById('nutstore-user').value = localStorage.getItem(STORAGE_KEYS.nutstoreUser) || '';
             document.getElementById('nutstore-pass').value = localStorage.getItem(STORAGE_KEYS.nutstorePass) || '';
             document.getElementById('nutstore-path').value = localStorage.getItem(STORAGE_KEYS.nutstorePath) || defaultNutstorePath;
@@ -1021,6 +1030,13 @@
             localStorage.setItem(STORAGE_KEYS.nutstorePath, document.getElementById('nutstore-path').value.trim());
             localStorage.setItem(STORAGE_KEYS.nutstoreAuto, document.getElementById('nutstore-auto').checked ? 'true' : 'false');
             setStatus('配置已保存');
+        }
+
+        function useNutstoreProxy()
+        {
+            document.getElementById('nutstore-url').value = proxyNutstoreUrl;
+            saveSettings();
+            setStatus('已切换到中转服务器', 'recording');
         }
 
         function setStatus(text, type = '')
@@ -2043,11 +2059,35 @@
         function getNutstoreConfig()
         {
             return {
-                url: document.getElementById('nutstore-url').value.trim() || defaultNutstoreUrl,
+                url: normalizeNutstoreBaseUrl(document.getElementById('nutstore-url').value.trim() || defaultNutstoreUrl),
                 user: document.getElementById('nutstore-user').value.trim(),
                 pass: document.getElementById('nutstore-pass').value.trim(),
                 path: document.getElementById('nutstore-path').value.trim() || defaultNutstorePath
             };
+        }
+
+        function normalizeNutstoreBaseUrl(url)
+        {
+            const trimmed = String(url || '').trim();
+            if (!trimmed) return defaultNutstoreUrl;
+            if (/^https?:\/\//i.test(trimmed)) return trimmed;
+            return `http://${trimmed}`;
+        }
+
+        function getProxyNutstoreUrl()
+        {
+            const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+            return `${protocol}//${proxyNutstoreHost}${proxyNutstorePath}`;
+        }
+
+        function isDirectNutstoreUrl(url)
+        {
+            return normalizeNutstoreBaseUrl(url).replace(/\/+$/, '') === directNutstoreUrl.replace(/\/+$/, '');
+        }
+
+        function isLegacyProxyNutstoreUrl(url)
+        {
+            return normalizeNutstoreBaseUrl(url).replace(/\/+$/, '') === legacyProxyNutstoreUrl.replace(/\/+$/, '');
         }
 
         function buildNutstoreUrl(config, pathOverride)
@@ -2157,6 +2197,13 @@
 
         async function nutstoreFetch(url, options, action)
         {
+            if (window.location.protocol === 'https:' && /^http:\/\//i.test(url))
+            {
+                const error = new Error(`${action}失败：当前页面是 HTTPS，但中转服务器地址是 HTTP。`);
+                error.isMixedContent = true;
+                throw error;
+            }
+
             try
             {
                 return await fetch(url, options);
@@ -2187,9 +2234,14 @@
 
         function formatNutstoreError(err)
         {
+            if (err?.isMixedContent)
+            {
+                return `${err.message} 浏览器会拦截 HTTPS 页面访问 HTTP 接口。请给 zihancai.top 配置 HTTPS，或把页面也部署在同一个 HTTP 源上测试。`;
+            }
+
             if (err?.isNetworkBlocked || err?.cause instanceof TypeError || /failed to fetch/i.test(err?.message || ''))
             {
-                return '浏览器无法直接连接坚果云 WebDAV。常见原因是 CORS 跨域拦截、网络不可达或 WebDAV 地址不正确。请先点“检测坚果云连接”；如果仍失败，需要通过 MCP/本地后端/同源代理转发 WebDAV 请求。';
+                return '浏览器无法连接 zihancai.top 的 WebDAV 中转服务。请确认 nginx 反代正在运行、域名解析正确、已允许 CORS/OPTIONS、地址为 /dav/，并且防火墙放行了对应端口。';
             }
 
             if (err?.status === 401 || err?.status === 403)
@@ -2221,7 +2273,8 @@
                     'nutstore.pull',
                     'nutstore.push',
                     'config.get',
-                    'config.setNutstore'
+                    'config.setNutstore',
+                    'config.useNutstoreProxy'
                 ],
                 async call(method, params = {})
                 {
@@ -2275,6 +2328,9 @@
                             if (params.path) document.getElementById('nutstore-path').value = params.path;
                             saveSettings();
                             return { ok: true };
+                        case 'config.useNutstoreProxy':
+                            useNutstoreProxy();
+                            return { ok: true, url: proxyNutstoreUrl };
                         default:
                             throw new Error(`Unknown MCP method: ${method}`);
                     }
