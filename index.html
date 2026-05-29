@@ -1,23 +1,20 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Math AI Chat (Load & Save)</title>
-    
-    <!-- Markdown 解析 -->
+    <title>Math AI Chat</title>
+
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    
-    <!-- 代码高亮 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 
-    <!-- MathJax 公式渲染 -->
     <script>
         window.MathJax = {
             tex: {
                 inlineMath: [['$', '$'], ['\\(', '\\)']],
-                displayMath: [['$$', '$$'], ['[', ']']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
                 processEscapes: true
             },
             options: {
@@ -33,79 +30,148 @@
 
     <style>
         :root {
-            --bg-color: #f4f4f9;
-            --primary-color: #4a90e2;
+            --bg-color: #f4f6fb;
+            --panel-color: #2c3e50;
+            --panel-muted: #34495e;
+            --primary-color: #3d7bd9;
+            --primary-dark: #2764ba;
             --toolbar-bg: #eef2f5;
             --border-color: #d1d5db;
+            --text-muted: #64748b;
         }
 
-        body, html {
+        * {
+            box-sizing: border-box;
+            touch-action: manipulation;
+        }
+
+        body,
+        html {
             margin: 0;
             padding: 0;
             height: 100%;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
+            background: var(--bg-color);
             display: flex;
             flex-direction: column;
             overflow: hidden;
         }
 
-        /* 顶部设置栏 */
         .settings-header {
-            background: #2c3e50;
+            background: var(--panel-color);
             color: white;
             padding: 10px 15px;
-            font-size: 0.9rem;
+            font-size: 0.92rem;
             cursor: pointer;
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-shrink: 0;
         }
-        
+
+        .settings-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
+
         .settings-panel {
-            background: #34495e;
+            background: var(--panel-muted);
             padding: 10px;
             display: none;
             flex-direction: column;
             gap: 10px;
             border-bottom: 1px solid #4a6278;
             flex-shrink: 0;
-        }
-        
-        @media (min-width: 600px) {
-            .settings-panel {
-                flex-direction: row;
-                flex-wrap: wrap;
-            }
+            max-height: 54vh;
+            overflow-y: auto;
         }
 
-        .settings-panel.show { display: flex; }
+        .settings-panel.show {
+            display: flex;
+        }
 
-        .settings-panel input[type="text"], 
-        .settings-panel input[type="password"] {
-            background: #2c3e50;
+        .settings-row {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+            flex-wrap: wrap;
+        }
+
+        .settings-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            flex: 1;
+            min-width: 220px;
+        }
+
+        .settings-group label {
+            color: #dbeafe;
+            font-size: 0.78rem;
+            font-weight: 700;
+        }
+
+        .settings-panel input,
+        .settings-panel textarea {
+            background: var(--panel-color);
             border: 1px solid #5dade2;
             color: white;
             padding: 8px;
             border-radius: 4px;
-            flex: 1;
-            min-width: 120px;
+            font: inherit;
             font-size: 0.9rem;
+            outline: none;
         }
 
-        /* 模型选择器样式 */
+        .settings-panel input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            min-width: 16px;
+            padding: 0;
+            accent-color: var(--primary-color);
+        }
+
+        .checkbox-label {
+            color: #e2e8f0;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.84rem;
+            font-weight: 700;
+            min-height: 38px;
+        }
+
+        .settings-panel textarea {
+            min-height: 76px;
+            resize: vertical;
+            line-height: 1.45;
+        }
+
+        .settings-panel input::placeholder,
+        .settings-panel textarea::placeholder {
+            color: #b7c9d8;
+        }
+
+        .setting-note {
+            color: #cbd5e1;
+            font-size: 0.75rem;
+            line-height: 1.35;
+        }
+
         .model-selector-group {
             position: relative;
             display: flex;
             flex: 1;
-            min-width: 200px;
+            min-width: 220px;
         }
 
         .model-selector-group input {
             border-top-right-radius: 0;
             border-bottom-right-radius: 0;
-            border-right: none;
+            border-right: 0;
+            width: 100%;
         }
 
         .model-list-btn {
@@ -116,33 +182,32 @@
             cursor: pointer;
             border-top-right-radius: 4px;
             border-bottom-right-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: background 0.2s;
+            min-width: 42px;
         }
 
-        .model-list-btn:hover { background: #3498db; }
-        .model-list-btn:active { background: #1f618d; }
+        .model-list-btn:hover {
+            background: #3498db;
+        }
 
-        /* 模型下拉列表 */
         .model-dropdown {
             position: absolute;
             top: 100%;
             left: 0;
             right: 0;
-            background: #2c3e50;
+            background: var(--panel-color);
             border: 1px solid #5dade2;
             border-radius: 4px;
             max-height: 250px;
             overflow-y: auto;
             z-index: 1000;
             display: none;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.28);
             margin-top: 2px;
         }
 
-        .model-dropdown.show { display: block; }
+        .model-dropdown.show {
+            display: block;
+        }
 
         .model-option {
             padding: 8px 12px;
@@ -152,54 +217,102 @@
             border-bottom: 1px solid #34495e;
         }
 
-        .model-option:last-child { border-bottom: none; }
-        .model-option:hover { background: #34495e; color: #5dade2; }
-        .model-option.loading { text-align: center; color: #bdc3c7; cursor: default; }
-        .model-option.error { color: #e74c3c; font-size: 0.8rem; }
+        .model-option:hover {
+            background: #3c5870;
+            color: #dff2ff;
+        }
 
-        .model-dropdown::-webkit-scrollbar { width: 6px; }
-        .model-dropdown::-webkit-scrollbar-thumb { background: #5dade2; border-radius: 3px; }
-        .model-dropdown::-webkit-scrollbar-track { background: #2c3e50; }
+        .model-option.loading {
+            text-align: center;
+            color: #bdc3c7;
+            cursor: default;
+        }
 
-        /* 按钮通用样式 */
+        .model-option.error {
+            color: #fecaca;
+            font-size: 0.8rem;
+            cursor: default;
+        }
+
         .action-btn {
-            padding: 8px 15px;
+            padding: 8px 13px;
+            min-height: 38px;
             color: white;
-            border: none;
+            border: 0;
             border-radius: 4px;
             cursor: pointer;
-            font-weight: bold;
+            font-weight: 700;
             white-space: nowrap;
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            gap: 5px;
+            gap: 6px;
             justify-content: center;
         }
 
-        .save-btn { background: #27ae60; }
-        .save-btn:hover { background: #2ecc71; }
+        .save-btn {
+            background: #238457;
+        }
 
-        .export-btn { background: #e67e22; }
-        .export-btn:hover { background: #d35400; }
+        .save-btn:hover {
+            background: #2aa96d;
+        }
 
-        .autosave-btn { background: #8e44ad; }
-        .autosave-btn:hover { background: #9b59b6; }
-        .autosave-btn.active { background: #2ecc71; pointer-events: none; }
+        .export-btn {
+            background: #ce6f18;
+        }
 
-        /* 新增：加载按钮样式 */
-        .import-btn { background: #16a085; }
-        .import-btn:hover { background: #1abc9c; }
-        
+        .export-btn:hover {
+            background: #b85f0f;
+        }
+
+        .autosave-btn {
+            background: #7f3a98;
+        }
+
+        .autosave-btn:hover {
+            background: #9145ad;
+        }
+
+        .autosave-btn.active {
+            background: #238457;
+        }
+
+        .import-btn {
+            background: #118270;
+        }
+
+        .import-btn:hover {
+            background: #159c88;
+        }
+
+        .sync-btn {
+            background: #3366a8;
+        }
+
+        .sync-btn:hover {
+            background: #3e78c4;
+        }
+
+        .danger-btn {
+            background: #a33a3a;
+        }
+
+        .danger-btn:hover {
+            background: #bf4646;
+        }
+
         .status-indicator {
             font-size: 0.8rem;
-            margin-left: 10px;
             color: #bdc3c7;
-            display: flex;
+            display: inline-flex;
             align-items: center;
+            min-height: 18px;
         }
-        .status-indicator.recording { color: #2ecc71; }
 
-        /* 聊天区域 */
+        .status-indicator.recording {
+            color: #86efac;
+        }
+
         #chat-container {
             flex: 1;
             overflow-y: auto;
@@ -212,68 +325,148 @@
         }
 
         .message {
-            max-width: 90%;
+            max-width: min(92%, 900px);
             padding: 12px 16px;
             border-radius: 12px;
             line-height: 1.6;
             word-wrap: break-word;
+            overflow-wrap: anywhere;
             font-size: 0.95rem;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
         }
 
         .message.user {
             align-self: flex-end;
-            background-color: var(--primary-color);
+            background: var(--primary-color);
             color: white;
             border-bottom-right-radius: 2px;
         }
 
         .message.ai {
             align-self: flex-start;
-            background-color: white;
-            color: #333;
+            background: white;
+            color: #263238;
             border-bottom-left-radius: 2px;
             border: 1px solid var(--border-color);
         }
 
-        /* 底部区域容器 */
+        .message.system {
+            align-self: center;
+            background: #fff7ed;
+            color: #9a3412;
+            border: 1px solid #fed7aa;
+            max-width: min(92%, 720px);
+        }
+
+        .message.ai pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+
+        .message.ai p {
+            margin: 0 0 8px 0;
+        }
+
+        .message.ai p:last-child {
+            margin: 0;
+        }
+
+        .message-images {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .message-image {
+            width: 100%;
+            max-height: 220px;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .message.ai .message-image {
+            border-color: var(--border-color);
+        }
+
         .bottom-section {
             background: white;
             border-top: 1px solid var(--border-color);
             flex-shrink: 0;
             display: flex;
             flex-direction: column;
-            position: relative; /* 为了定位预览区 */
+            position: relative;
         }
 
-        /* 实时预览区样式 */
         .math-preview-area {
-            background: #fffdf5; /* 淡淡的黄色背景，区分输入区 */
+            background: #fffdf5;
             border-bottom: 1px solid #e0e0e0;
             padding: 8px 15px;
             font-size: 0.9rem;
             color: #555;
             max-height: 120px;
             overflow-y: auto;
-            display: none; /* 默认隐藏 */
-            box-shadow: inset 0 -2px 4px rgba(0,0,0,0.02);
+            display: none;
         }
 
         .math-preview-area.show {
             display: block;
-            animation: fadeIn 0.2s ease-in-out;
-        }
-        
-        .math-preview-area p { margin: 0; }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(5px); }
-            to { opacity: 1; transform: translateY(0); }
         }
 
-        /* 数学符号工具栏 */
+        .math-preview-area p {
+            margin: 0;
+        }
+
+        .attachment-tray {
+            display: none;
+            gap: 8px;
+            padding: 8px 10px;
+            border-bottom: 1px solid #e5e7eb;
+            overflow-x: auto;
+            background: #f8fafc;
+        }
+
+        .attachment-tray.show {
+            display: flex;
+        }
+
+        .attachment-thumb {
+            position: relative;
+            width: 70px;
+            height: 70px;
+            flex: 0 0 auto;
+        }
+
+        .attachment-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid #cbd5e1;
+            display: block;
+        }
+
+        .attachment-thumb button {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            width: 22px;
+            height: 22px;
+            border: 0;
+            border-radius: 50%;
+            background: #1f2937;
+            color: white;
+            cursor: pointer;
+            line-height: 1;
+        }
+
         .math-toolbar-container {
-            background-color: var(--toolbar-bg);
+            background: var(--toolbar-bg);
             border-bottom: 1px solid #e0e0e0;
             display: flex;
             flex-direction: column;
@@ -288,12 +481,14 @@
             -webkit-overflow-scrolling: touch;
             scrollbar-width: none;
         }
-        
+
         .math-toolbar-row:first-child {
             border-bottom: 1px solid #e2e8f0;
         }
 
-        .math-toolbar-row::-webkit-scrollbar { display: none; }
+        .math-toolbar-row::-webkit-scrollbar {
+            display: none;
+        }
 
         .math-btn {
             background: white;
@@ -305,8 +500,7 @@
             cursor: pointer;
             user-select: none;
             color: #334155;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-            transition: all 0.1s;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -314,13 +508,10 @@
         }
 
         .math-btn:active {
-            background-color: #e2e8f0;
+            background: #e2e8f0;
             transform: translateY(1px);
         }
-        
-        .math-btn span { pointer-events: none; }
 
-        /* 输入区域 */
         .input-area {
             display: flex;
             padding: 10px;
@@ -329,7 +520,24 @@
             background: white;
         }
 
-        textarea {
+        #attach-btn {
+            width: 44px;
+            height: 44px;
+            border: 1px solid var(--border-color);
+            background: #f8fafc;
+            color: #334155;
+            border-radius: 8px;
+            cursor: pointer;
+            flex-shrink: 0;
+            font-weight: 800;
+            font-size: 1.1rem;
+        }
+
+        #attach-btn:hover {
+            background: #eef2f7;
+        }
+
+        textarea#user-input {
             flex: 1;
             border: 1px solid var(--border-color);
             border-radius: 8px;
@@ -340,555 +548,1282 @@
             max-height: 120px;
             outline: none;
             font-family: inherit;
+            color: #111827;
         }
 
-        textarea:focus { border-color: var(--primary-color); }
+        textarea#user-input:focus {
+            border-color: var(--primary-color);
+        }
 
         button#send-btn {
-            background-color: var(--primary-color);
+            background: var(--primary-color);
             color: white;
-            border: none;
+            border: 0;
             padding: 0 20px;
             height: 44px;
             border-radius: 8px;
-            font-weight: bold;
+            font-weight: 700;
             cursor: pointer;
             flex-shrink: 0;
         }
-        
-        button#send-btn:disabled { background-color: #94a3b8; }
 
-        .message.ai pre { background: #2d2d2d; color: #f8f8f2; padding: 10px; border-radius: 5px; overflow-x: auto; }
-        .message.ai p { margin: 0 0 8px 0; }
-        .message.ai p:last-child { margin: 0; }
-        
-        * { touch-action: manipulation; }
+        button#send-btn:hover {
+            background: var(--primary-dark);
+        }
+
+        button#send-btn:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+        }
+
+        @media (max-width: 640px) {
+            .settings-group {
+                min-width: 100%;
+            }
+
+            .settings-row {
+                gap: 8px;
+            }
+
+            .message {
+                max-width: 96%;
+            }
+
+            button#send-btn {
+                padding: 0 14px;
+            }
+        }
     </style>
 </head>
+
 <body>
-
-<!-- 顶部设置 (可折叠) -->
-<div class="settings-header" onclick="toggleSettings()">
-    <div style="display:flex; align-items:center;">
-        <span>⚙️ 设置与 API Key</span>
-        <span id="autosave-status" class="status-indicator"></span>
-    </div>
-    <span id="toggle-icon">▼</span>
-</div>
-<div class="settings-panel" id="settings-panel">
-    <input type="text" id="api-url" placeholder="API 地址 (如 https://api.openai.com/v1)">
-    <input type="password" id="api-key" placeholder="API Key (sk-...)">
-    
-    <!-- 模型选择区域 -->
-    <div class="model-selector-group">
-        <input type="text" id="model-name" placeholder="模型 (如 gpt-4o, deepseek-chat)">
-        <button class="model-list-btn" onclick="fetchAndShowModels(event)" title="获取模型列表">▼</button>
-        <div id="model-dropdown" class="model-dropdown"></div>
+    <div class="settings-header" onclick="toggleSettings()">
+        <div class="settings-title">
+            <span>设置与同步</span>
+            <span id="autosave-status" class="status-indicator"></span>
+        </div>
+        <span id="toggle-icon">▼</span>
     </div>
 
-    <button class="action-btn save-btn" onclick="saveSettings()">保存配置</button>
-    
-    <!-- 自动保存按钮 -->
-    <button id="btn-autosave" class="action-btn autosave-btn" onclick="setupAutoSave()">
-        <span>📂</span> 启用自动保存
-    </button>
-    
-    <!-- 新增：加载对话按钮 (触发隐藏的 file input) -->
-    <input type="file" id="import-file" accept=".json" style="display:none" onchange="handleFileImport(this)">
-    <button class="action-btn import-btn" onclick="document.getElementById('import-file').click()">
-        <span>📥</span> 加载对话
-    </button>
+    <div class="settings-panel" id="settings-panel">
+        <div class="settings-row">
+            <div class="settings-group">
+                <label for="api-url">默认 API 地址</label>
+                <input type="text" id="api-url" placeholder="https://api.openai.com/v1">
+            </div>
+            <div class="settings-group">
+                <label for="api-key">默认 API Key</label>
+                <input type="password" id="api-key" placeholder="sk-...">
+            </div>
+            <div class="settings-group">
+                <label for="model-name">默认模型</label>
+                <div class="model-selector-group">
+                    <input type="text" id="model-name" placeholder="gpt-4o, deepseek-chat">
+                    <button class="model-list-btn" onclick="fetchAndShowModels(event)" title="获取模型列表">▼</button>
+                    <div id="model-dropdown" class="model-dropdown"></div>
+                </div>
+            </div>
+        </div>
 
-    <button class="action-btn export-btn" onclick="exportChat()">导出对话</button>
-</div>
+        <div class="settings-row">
+            <div class="settings-group">
+                <label for="api-list">多 API 轮询列表</label>
+                <textarea id="api-list" placeholder="每行一个：API地址 | API Key | 模型(可选)&#10;https://api.openai.com/v1 | sk-xxx | gpt-4o&#10;https://api.deepseek.com/v1 | sk-yyy | deepseek-chat"></textarea>
+                <div class="setting-note">发送时按轮询顺序选择接口；当前接口失败会自动尝试下一行。留空则使用上面的默认 API。</div>
+            </div>
+        </div>
 
-<!-- 聊天内容 -->
-<div id="chat-container">
-    <div class="message ai">
-        你好！我是你的数学助手。
-        <br>点击下方的工具栏可以快速输入数学符号，我会自动渲染公式。
-        <br><b>提示：</b>你现在可以点击设置栏中的“加载对话”来恢复之前的聊天记录。
+        <div class="settings-row">
+            <div class="settings-group">
+                <label for="nutstore-url">坚果云 WebDAV/MCP 地址</label>
+                <input type="text" id="nutstore-url" placeholder="https://dav.jianguoyun.com/dav/">
+            </div>
+            <div class="settings-group">
+                <label for="nutstore-user">坚果云账号</label>
+                <input type="text" id="nutstore-user" placeholder="你的坚果云登录邮箱">
+            </div>
+            <div class="settings-group">
+                <label for="nutstore-pass">坚果云应用密码</label>
+                <input type="password" id="nutstore-pass" placeholder="坚果云第三方应用密码">
+            </div>
+            <div class="settings-group">
+                <label for="nutstore-path">同步文件路径</label>
+                <input type="text" id="nutstore-path" placeholder="/MathAIChat/chat.json">
+            </div>
+        </div>
+
+        <div class="setting-note">
+            已暴露浏览器端 MCP 桥接对象：window.MathChatMCP。坚果云同步使用 WebDAV；如果浏览器因 CORS 拦截，请用同源 MCP/WebDAV 代理转发。
+        </div>
+
+        <div class="settings-row">
+            <label class="checkbox-label">
+                <input type="checkbox" id="nutstore-auto">
+                启用坚果云自动同步
+            </label>
+            <button class="action-btn save-btn" onclick="saveSettings()">保存配置</button>
+            <button id="btn-autosave" class="action-btn autosave-btn" onclick="setupAutoSave()">启用本地自动保存</button>
+            <input type="file" id="import-file" accept=".json,application/json" style="display:none" onchange="handleFileImport(this)">
+            <button class="action-btn import-btn" onclick="document.getElementById('import-file').click()">加载对话</button>
+            <button class="action-btn export-btn" onclick="exportChat()">导出对话</button>
+            <button class="action-btn sync-btn" onclick="syncFromNutstore()">从坚果云拉取</button>
+            <button class="action-btn sync-btn" onclick="syncToNutstore()">同步到坚果云</button>
+            <button class="action-btn danger-btn" onclick="clearConversation()">清空当前对话</button>
+        </div>
     </div>
-</div>
 
-<!-- 底部区域：预览区 + 工具栏 + 输入框 -->
-<div class="bottom-section">
-    <!-- 实时预览区 -->
-    <div id="math-preview" class="math-preview-area"></div>
+    <div id="chat-container"></div>
 
-    <div class="math-toolbar-container">
-        <!-- 第一行：基础符号 -->
-        <div class="math-toolbar-row" id="math-toolbar-basic"></div>
-        <!-- 第二行：高级函数 -->
-        <div class="math-toolbar-row" id="math-toolbar-funcs"></div>
+    <div class="bottom-section">
+        <div id="math-preview" class="math-preview-area"></div>
+        <div id="attachment-tray" class="attachment-tray"></div>
+
+        <div class="math-toolbar-container">
+            <div class="math-toolbar-row" id="math-toolbar-basic"></div>
+            <div class="math-toolbar-row" id="math-toolbar-funcs"></div>
+        </div>
+
+        <div class="input-area">
+            <input type="file" id="image-input" accept="image/*" multiple style="display:none" onchange="handleImageUpload(this)">
+            <button id="attach-btn" onclick="document.getElementById('image-input').click()" title="上传图片">+</button>
+            <textarea id="user-input" placeholder="输入数学问题..." rows="1"></textarea>
+            <button id="send-btn" onclick="sendMessage()">发送</button>
+        </div>
     </div>
 
-    <div class="input-area">
-        <textarea id="user-input" placeholder="输入数学问题..." rows="1"></textarea>
-        <button id="send-btn" onclick="sendMessage()">发送</button>
-    </div>
-</div>
-
-<script>
-    // --- 1. 数学符号配置 ---
-    
-    const basicSymbols = [
-        { label: '+', insert: '+', offset: 0 },
-        { label: '-', insert: '-', offset: 0 },
-        { label: '*', insert: '*', offset: 0 },
-        { label: '/', insert: '/', offset: 0 },
-        { label: '=', insert: '=', offset: 0 },
-        { label: '\'', insert: '\'', offset: 0 },
-        { label: '%', insert: '%', offset: 0 },
-        { label: '(', insert: '(', offset: 0 },
-        { label: ')', insert: ')', offset: 0 },
-        { label: '^', insert: '^', offset: 0 },
-        { label: '→', insert: '\\to ', offset: 0 }
-    ];
-
-    const funcSymbols = [
-        { label: '$', insert: '$$', offset: 1},
-        { label: 'x', insert: 'x', offset: 0},
-        { label: 'x²', insert: '^{2}', offset: 0 },
-        { label: 'xⁿ', insert: '^{}', offset: 1 },
-        { label: '√', insert: '\\sqrt{}', offset: 1 },
-        { label: 'ⁿ√', insert: '\\sqrt[]{}', offset: 3 },
-        { label: 'frac', insert: '\\frac{}{}', offset: 3 },
-        { label: 'sin', insert: '\\sin()', offset: 1 },
-        { label: 'cos', insert: '\\cos()', offset: 1 },
-        { label: 'tan', insert: '\\tan()', offset: 1 },
-        { label: 'ln', insert: '\\ln()', offset: 1 },
-        { label: 'log', insert: '\\log_{}{}', offset: 3 },
-        { label: 'eˣ', insert: 'e^{}', offset: 1 },
-        { label: 'π', insert: '\\pi', offset: 0 },
-        { label: 'θ', insert: '\\theta', offset: 0 },
-        { label: '∞', insert: '\\infty', offset: 0 },
-        { label: '∫', insert: '\\int ', offset: 0 },
-        { label: '∫ab', insert: '\\int_{}^{}', offset: 3 },
-        { label: 'dx', insert: 'dx', offset: 0 },
-        { label: 'd/dx', insert: '\\frac{d}{dx}', offset: 0 },
-        { label: '∂', insert: '\\partial', offset: 0 },
-        { label: '∑', insert: '\\sum_{}^{}', offset: 3 },
-        { label: 'lim', insert: '\\lim_{ \\to }', offset: 4 },
-        { label: '≤', insert: '\\le', offset: 0 },
-        { label: '≥', insert: '\\ge', offset: 0 },
-        { label: '≈', insert: '\\approx', offset: 0 },
-        { label: '≠', insert: '\\ne', offset: 0 },
-        { label: '∵', insert: '\\because', offset: 0 },
-        { label: '∴', insert: '\\therefore', offset: 0 }
-    ];
-
-    // --- 2. 初始化逻辑 ---
-    const chatContainer = document.getElementById('chat-container');
-    const userInput = document.getElementById('user-input');
-    const previewArea = document.getElementById('math-preview');
-    
-    function renderToolbar(containerId, symbols) {
-        const container = document.getElementById(containerId);
-        symbols.forEach(sym => {
-            const btn = document.createElement('div');
-            btn.className = 'math-btn';
-            btn.textContent = sym.label;
-            btn.onmousedown = (e) => e.preventDefault(); 
-            btn.onclick = () => insertSymbol(sym.insert, sym.offset);
-            container.appendChild(btn);
-        });
-    }
-
-    renderToolbar('math-toolbar-basic', basicSymbols);
-    renderToolbar('math-toolbar-funcs', funcSymbols);
-
-    function insertSymbol(text, offsetBack) {
-        const start = userInput.selectionStart;
-        const end = userInput.selectionEnd;
-        const value = userInput.value;
-        userInput.value = value.substring(0, start) + text + value.substring(end);
-        const newPos = start + text.length - offsetBack;
-        userInput.setSelectionRange(newPos, newPos);
-        userInput.focus();
-        userInput.dispatchEvent(new Event('input')); 
-    }
-
-    // --- 3. 聊天与 API 逻辑 ---
-    const defaultUrl = "https://api.openai.com/v1";
-    const defaultModel = "gpt-3.5-turbo";
-    let messageHistory = [];
-    
-    // --- 自动保存相关变量 ---
-    let fileHandle = null;
-    let isAutoSaveActive = false;
-
-    window.onload = () => {
-        document.getElementById('api-url').value = localStorage.getItem('api_url') || '';
-        document.getElementById('api-key').value = localStorage.getItem('api_key') || '';
-        document.getElementById('model-name').value = localStorage.getItem('model_name') || defaultModel;
-        
-        marked.setOptions({
-            highlight: (code, lang) => highlight.highlight(code, { language: highlight.getLanguage(lang) ? lang : 'plaintext' }).value
-        });
-
-        document.addEventListener('click', (e) => {
-            const dropdown = document.getElementById('model-dropdown');
-            const btn = document.querySelector('.model-list-btn');
-            if (!dropdown.contains(e.target) && e.target !== btn) {
-                dropdown.classList.remove('show');
-            }
-        });
-    };
-
-    function toggleSettings() {
-        const panel = document.getElementById('settings-panel');
-        const icon = document.getElementById('toggle-icon');
-        if (panel.style.display === 'flex') {
-            panel.style.display = 'none';
-            icon.textContent = '▼';
-        } else {
-            panel.style.display = 'flex';
-            icon.textContent = '▲';
-        }
-    }
-
-    function saveSettings() {
-        localStorage.setItem('api_url', document.getElementById('api-url').value);
-        localStorage.setItem('api_key', document.getElementById('api-key').value);
-        localStorage.setItem('model_name', document.getElementById('model-name').value);
-        alert('配置已保存');
-        const panel = document.getElementById('settings-panel');
-        if(panel.style.display === 'flex') toggleSettings();
-    }
-
-    // --- 自动保存功能 ---
-    async function setupAutoSave() {
-        if (!('showDirectoryPicker' in window)) {
-            alert('您的浏览器不支持文件系统访问 API。请使用 Chrome/Edge 桌面版。');
-            return;
-        }
-
-        try {
-            const dirHandle = await window.showDirectoryPicker();
-            const now = new Date();
-            const timestamp = now.getFullYear() +
-                String(now.getMonth() + 1).padStart(2, '0') +
-                String(now.getDate()).padStart(2, '0') + '_' +
-                String(now.getHours()).padStart(2, '0') +
-                String(now.getMinutes()).padStart(2, '0') +
-                String(now.getSeconds()).padStart(2, '0');
-            const fileName = `chat_${timestamp}.json`;
-
-            fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
-            
-            isAutoSaveActive = true;
-            const btn = document.getElementById('btn-autosave');
-            btn.innerHTML = `<span>✅</span> ${fileName}`;
-            btn.classList.add('active');
-            
-            const status = document.getElementById('autosave-status');
-            status.textContent = "● 正在记录";
-            status.classList.add('recording');
-
-            await writeToFile();
-            alert(`自动保存已开启！文件: ${fileName}`);
-
-        } catch (err) {
-            if (err.name !== 'AbortError') {
-                console.error(err);
-                alert('设置自动保存失败: ' + err.message);
-            }
-        }
-    }
-
-    async function writeToFile() {
-        if (!fileHandle || !isAutoSaveActive) return;
-        try {
-            const writable = await fileHandle.createWritable();
-            await writable.write(JSON.stringify(messageHistory, null, 2));
-            await writable.close();
-        } catch (err) {
-            console.error('自动保存写入失败:', err);
-            const status = document.getElementById('autosave-status');
-            status.textContent = "● 保存失败";
-            status.style.color = "red";
-        }
-    }
-
-    // --- 新增：加载对话功能 ---
-    function handleFileImport(input) {
-        const file = input.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                const loadedHistory = JSON.parse(e.target.result);
-                
-                if (!Array.isArray(loadedHistory)) {
-                    throw new Error("文件格式错误：内容不是数组");
-                }
-
-                // 1. 清空当前界面
-                chatContainer.innerHTML = '';
-                messageHistory = [];
-
-                // 2. 遍历并渲染消息
-                loadedHistory.forEach(msg => {
-                    if (!msg.role || !msg.content) return;
-                    
-                    messageHistory.push(msg);
-                    
-                    let contentHtml = "";
-                    if (msg.role === 'assistant') {
-                        // AI 消息需要 Markdown 解析
-                        contentHtml = marked.parse(msg.content);
-                    } else {
-                        // 用户消息通常是纯文本，但也可能包含 LaTeX
-                        // 简单转义 HTML 标签防止 XSS，但保留 LaTeX 符号
-                        contentHtml = msg.content.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-                    }
-                    
-                    appendMessage(msg.role === 'assistant' ? 'ai' : 'user', contentHtml);
-                });
-
-                // 3. 重新渲染所有数学公式
-                MathJax.typesetPromise([chatContainer]).then(() => {
-                    chatContainer.scrollTop = chatContainer.scrollHeight;
-                });
-
-                // 4. 如果开启了自动保存，立即将加载的内容写入当前自动保存文件
-                if (isAutoSaveActive) {
-                    writeToFile();
-                }
-
-                alert(`成功加载 ${loadedHistory.length} 条消息`);
-                
-                // 关闭设置面板
-                const panel = document.getElementById('settings-panel');
-                if(panel.style.display === 'flex') toggleSettings();
-
-            } catch (err) {
-                alert("加载失败: " + err.message);
-            }
+    <script>
+        const STORAGE_KEYS = {
+            apiUrl: 'api_url',
+            apiKey: 'api_key',
+            modelName: 'model_name',
+            apiList: 'api_list',
+            conversation: 'math_chat_conversation_v2',
+            apiIndex: 'math_chat_api_index',
+            nutstoreUrl: 'nutstore_url',
+            nutstoreUser: 'nutstore_user',
+            nutstorePass: 'nutstore_pass',
+            nutstorePath: 'nutstore_path',
+            nutstoreAuto: 'nutstore_auto_sync'
         };
-        reader.readAsText(file);
-        input.value = ''; // 重置 input，允许重复选择同一文件
-    }
 
-    function exportChat() {
-        if (messageHistory.length === 0) {
-            alert('暂无对话记录可导出');
-            return;
-        }
-        const dataStr = JSON.stringify(messageHistory, null, 2);
-        const blob = new Blob([dataStr], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const date = new Date();
-        const timestamp = date.toISOString().slice(0,19).replace(/[-T:]/g,"");
-        a.download = `math_chat_export_${timestamp}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }
+        const defaultUrl = 'https://api.openai.com/v1';
+        const defaultModel = 'gpt-4o';
+        const defaultNutstoreUrl = 'https://dav.jianguoyun.com/dav/';
+        const defaultNutstorePath = '/MathAIChat/chat.json';
+        const maxImageBytes = 8 * 1024 * 1024;
 
-    async function fetchAndShowModels(event) {
-        event.stopPropagation();
-        const dropdown = document.getElementById('model-dropdown');
-        const apiKey = document.getElementById('api-key').value.trim();
-        let apiUrl = document.getElementById('api-url').value.trim() || defaultUrl;
+        const basicSymbols = [
+            { label: '+', insert: '+', offset: 0 },
+            { label: '-', insert: '-', offset: 0 },
+            { label: '*', insert: '*', offset: 0 },
+            { label: '/', insert: '/', offset: 0 },
+            { label: '=', insert: '=', offset: 0 },
+            { label: '\'', insert: '\'', offset: 0 },
+            { label: '%', insert: '%', offset: 0 },
+            { label: '(', insert: '(', offset: 0 },
+            { label: ')', insert: ')', offset: 0 },
+            { label: '^', insert: '^', offset: 0 },
+            { label: '→', insert: '\\to ', offset: 0 }
+        ];
 
-        if (dropdown.classList.contains('show')) {
-            dropdown.classList.remove('show');
-            return;
-        }
+        const funcSymbols = [
+            { label: '$', insert: '$$', offset: 1 },
+            { label: 'x', insert: 'x', offset: 0 },
+            { label: 'x²', insert: '^{2}', offset: 0 },
+            { label: 'xⁿ', insert: '^{}', offset: 1 },
+            { label: '√', insert: '\\sqrt{}', offset: 1 },
+            { label: 'ⁿ√', insert: '\\sqrt[]{}', offset: 3 },
+            { label: 'frac', insert: '\\frac{}{}', offset: 3 },
+            { label: 'sin', insert: '\\sin()', offset: 1 },
+            { label: 'cos', insert: '\\cos()', offset: 1 },
+            { label: 'tan', insert: '\\tan()', offset: 1 },
+            { label: 'ln', insert: '\\ln()', offset: 1 },
+            { label: 'log', insert: '\\log_{}{}', offset: 3 },
+            { label: 'eˣ', insert: 'e^{}', offset: 1 },
+            { label: 'π', insert: '\\pi', offset: 0 },
+            { label: 'θ', insert: '\\theta', offset: 0 },
+            { label: '∞', insert: '\\infty', offset: 0 },
+            { label: '∫', insert: '\\int ', offset: 0 },
+            { label: '∫ab', insert: '\\int_{}^{}', offset: 3 },
+            { label: 'dx', insert: 'dx', offset: 0 },
+            { label: 'd/dx', insert: '\\frac{d}{dx}', offset: 0 },
+            { label: '∂', insert: '\\partial', offset: 0 },
+            { label: '∑', insert: '\\sum_{}^{}', offset: 3 },
+            { label: 'lim', insert: '\\lim_{ \\to }', offset: 4 },
+            { label: '≤', insert: '\\le', offset: 0 },
+            { label: '≥', insert: '\\ge', offset: 0 },
+            { label: '≈', insert: '\\approx', offset: 0 },
+            { label: '≠', insert: '\\ne', offset: 0 },
+            { label: '∵', insert: '\\because', offset: 0 },
+            { label: '∴', insert: '\\therefore', offset: 0 }
+        ];
 
-        if (!apiKey) {
-            alert('请先填写 API Key');
-            return;
-        }
+        const chatContainer = document.getElementById('chat-container');
+        const userInput = document.getElementById('user-input');
+        const previewArea = document.getElementById('math-preview');
+        const attachmentTray = document.getElementById('attachment-tray');
 
-        dropdown.classList.add('show');
-        dropdown.innerHTML = '<div class="model-option loading">正在获取模型列表...</div>';
+        let messageHistory = [];
+        let pendingImages = [];
+        let fileHandle = null;
+        let isAutoSaveActive = false;
+        let renderPromise = Promise.resolve();
+        let apiRoundRobinIndex = Number(localStorage.getItem(STORAGE_KEYS.apiIndex) || 0);
+        let autoSyncTimer = null;
 
-        try {
-            if (apiUrl.endsWith('/chat/completions')) {
-                apiUrl = apiUrl.replace('/chat/completions', '');
+        window.addEventListener('load', initApp);
+
+        function initApp()
+        {
+            document.getElementById('api-url').value = localStorage.getItem(STORAGE_KEYS.apiUrl) || '';
+            document.getElementById('api-key').value = localStorage.getItem(STORAGE_KEYS.apiKey) || '';
+            document.getElementById('model-name').value = localStorage.getItem(STORAGE_KEYS.modelName) || defaultModel;
+            document.getElementById('api-list').value = localStorage.getItem(STORAGE_KEYS.apiList) || '';
+            document.getElementById('nutstore-url').value = localStorage.getItem(STORAGE_KEYS.nutstoreUrl) || defaultNutstoreUrl;
+            document.getElementById('nutstore-user').value = localStorage.getItem(STORAGE_KEYS.nutstoreUser) || '';
+            document.getElementById('nutstore-pass').value = localStorage.getItem(STORAGE_KEYS.nutstorePass) || '';
+            document.getElementById('nutstore-path').value = localStorage.getItem(STORAGE_KEYS.nutstorePath) || defaultNutstorePath;
+            document.getElementById('nutstore-auto').checked = localStorage.getItem(STORAGE_KEYS.nutstoreAuto) === 'true';
+
+            if (window.marked)
+            {
+                marked.setOptions({
+                    highlight: (code, lang) =>
+                    {
+                        if (!window.hljs) return code;
+                        return hljs.highlight(code, { language: hljs.getLanguage(lang) ? lang : 'plaintext' }).value;
+                    }
+                });
             }
-            if (apiUrl.endsWith('/')) {
-                apiUrl = apiUrl.slice(0, -1);
-            }
-            const modelsUrl = `${apiUrl}/models`;
 
-            const response = await fetch(modelsUrl, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${apiKey}`,
-                    'Content-Type': 'application/json'
+            renderToolbar('math-toolbar-basic', basicSymbols);
+            renderToolbar('math-toolbar-funcs', funcSymbols);
+            setupGlobalClickHandlers();
+            setupMcpBridge();
+            loadConversationFromCache();
+        }
+
+        function setupGlobalClickHandlers()
+        {
+            document.addEventListener('click', (event) =>
+            {
+                const dropdown = document.getElementById('model-dropdown');
+                const btn = document.querySelector('.model-list-btn');
+                if (dropdown && !dropdown.contains(event.target) && event.target !== btn)
+                {
+                    dropdown.classList.remove('show');
                 }
             });
+        }
 
-            if (!response.ok) {
-                throw new Error(`HTTP Error: ${response.status}`);
-            }
+        function renderToolbar(containerId, symbols)
+        {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            container.innerHTML = '';
+            symbols.forEach((sym) =>
+            {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'math-btn';
+                btn.textContent = sym.label;
+                btn.onmousedown = (event) => event.preventDefault();
+                btn.onclick = () => insertSymbol(sym.insert, sym.offset);
+                container.appendChild(btn);
+            });
+        }
 
-            const data = await response.json();
-            const models = Array.isArray(data.data) ? data.data : (Array.isArray(data) ? data : []);
-            models.sort((a, b) => a.id.localeCompare(b.id));
+        function insertSymbol(text, offsetBack)
+        {
+            const start = userInput.selectionStart;
+            const end = userInput.selectionEnd;
+            const value = userInput.value;
+            userInput.value = value.substring(0, start) + text + value.substring(end);
+            const newPos = start + text.length - offsetBack;
+            userInput.setSelectionRange(newPos, newPos);
+            userInput.focus();
+            userInput.dispatchEvent(new Event('input'));
+        }
 
-            dropdown.innerHTML = '';
+        function toggleSettings()
+        {
+            const panel = document.getElementById('settings-panel');
+            const icon = document.getElementById('toggle-icon');
+            panel.classList.toggle('show');
+            icon.textContent = panel.classList.contains('show') ? '▲' : '▼';
+        }
 
-            if (models.length === 0) {
-                dropdown.innerHTML = '<div class="model-option error">未找到模型</div>';
+        function saveSettings()
+        {
+            localStorage.setItem(STORAGE_KEYS.apiUrl, document.getElementById('api-url').value.trim());
+            localStorage.setItem(STORAGE_KEYS.apiKey, document.getElementById('api-key').value.trim());
+            localStorage.setItem(STORAGE_KEYS.modelName, document.getElementById('model-name').value.trim());
+            localStorage.setItem(STORAGE_KEYS.apiList, document.getElementById('api-list').value.trim());
+            localStorage.setItem(STORAGE_KEYS.nutstoreUrl, document.getElementById('nutstore-url').value.trim());
+            localStorage.setItem(STORAGE_KEYS.nutstoreUser, document.getElementById('nutstore-user').value.trim());
+            localStorage.setItem(STORAGE_KEYS.nutstorePass, document.getElementById('nutstore-pass').value.trim());
+            localStorage.setItem(STORAGE_KEYS.nutstorePath, document.getElementById('nutstore-path').value.trim());
+            localStorage.setItem(STORAGE_KEYS.nutstoreAuto, document.getElementById('nutstore-auto').checked ? 'true' : 'false');
+            setStatus('配置已保存');
+        }
+
+        function setStatus(text, type = '')
+        {
+            const status = document.getElementById('autosave-status');
+            status.textContent = text ? `● ${text}` : '';
+            status.className = `status-indicator ${type}`;
+        }
+
+        async function setupAutoSave()
+        {
+            if (!('showDirectoryPicker' in window))
+            {
+                alert('您的浏览器不支持文件系统访问 API。请使用 Chrome/Edge 桌面版。');
                 return;
             }
 
-            models.forEach(model => {
-                const div = document.createElement('div');
-                div.className = 'model-option';
-                div.textContent = model.id;
-                div.onclick = () => {
-                    document.getElementById('model-name').value = model.id;
-                    dropdown.classList.remove('show');
-                };
-                dropdown.appendChild(div);
+            try
+            {
+                const dirHandle = await window.showDirectoryPicker();
+                const fileName = `chat_${formatTimestamp(new Date())}.json`;
+                fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
+                isAutoSaveActive = true;
+                const btn = document.getElementById('btn-autosave');
+                btn.textContent = `正在保存：${fileName}`;
+                btn.classList.add('active');
+                setStatus('正在记录', 'recording');
+                await writeToFile();
+            } catch (err)
+            {
+                if (err.name !== 'AbortError')
+                {
+                    console.error(err);
+                    alert('设置自动保存失败: ' + err.message);
+                }
+            }
+        }
+
+        async function writeToFile()
+        {
+            if (!fileHandle || !isAutoSaveActive) return;
+            try
+            {
+                const writable = await fileHandle.createWritable();
+                await writable.write(JSON.stringify(buildConversationPayload(), null, 2));
+                await writable.close();
+            } catch (err)
+            {
+                console.error('自动保存写入失败:', err);
+                setStatus('保存失败');
+            }
+        }
+
+        function buildConversationPayload()
+        {
+            return {
+                version: 2,
+                app: 'Math AI Chat',
+                exportedAt: new Date().toISOString(),
+                messages: messageHistory
+            };
+        }
+
+        function persistConversation()
+        {
+            localStorage.setItem(STORAGE_KEYS.conversation, JSON.stringify(buildConversationPayload()));
+            writeToFile();
+            scheduleAutoSync();
+        }
+
+        function loadConversationFromCache()
+        {
+            const raw = localStorage.getItem(STORAGE_KEYS.conversation);
+            if (!raw)
+            {
+                renderGreeting();
+                return;
+            }
+
+            try
+            {
+                const messages = parseConversationPayload(JSON.parse(raw));
+                if (messages.length)
+                {
+                    restoreConversation(messages, { silent: true });
+                    return;
+                }
+            } catch (err)
+            {
+                console.warn('本地缓存对话加载失败:', err);
+            }
+
+            renderGreeting();
+        }
+
+        function renderGreeting()
+        {
+            chatContainer.innerHTML = '';
+            const div = document.createElement('div');
+            div.className = 'message ai';
+            div.innerHTML = '你好！我是你的数学助手。<br>你可以输入数学问题、上传图片，也可以从设置中导入或同步对话。';
+            chatContainer.appendChild(div);
+        }
+
+        function handleFileImport(input)
+        {
+            const file = input.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) =>
+            {
+                try
+                {
+                    const payload = JSON.parse(event.target.result);
+                    const loadedHistory = parseConversationPayload(payload);
+                    if (!loadedHistory.length)
+                    {
+                        throw new Error('文件中没有可加载的对话消息');
+                    }
+                    restoreConversation(loadedHistory);
+                    alert(`成功加载 ${loadedHistory.length} 条消息`);
+                } catch (err)
+                {
+                    alert('加载失败: ' + err.message);
+                } finally
+                {
+                    input.value = '';
+                }
+            };
+            reader.onerror = () =>
+            {
+                alert('读取文件失败');
+                input.value = '';
+            };
+            reader.readAsText(file, 'utf-8');
+        }
+
+        function parseConversationPayload(payload)
+        {
+            const source = Array.isArray(payload)
+                ? payload
+                : (payload?.messages || payload?.messageHistory || payload?.history || []);
+
+            if (!Array.isArray(source))
+            {
+                throw new Error('文件格式错误：未找到 messages 数组');
+            }
+
+            return source
+                .map(normalizeMessage)
+                .filter(Boolean);
+        }
+
+        function normalizeMessage(msg)
+        {
+            if (!msg || typeof msg !== 'object') return null;
+            const roleMap = { ai: 'assistant', bot: 'assistant', assistant: 'assistant', user: 'user', system: 'system' };
+            const role = roleMap[msg.role] || 'user';
+            const normalized = normalizeContent(msg.content ?? msg.text ?? '');
+            if (typeof normalized === 'string' && normalized.length === 0) return null;
+            if (Array.isArray(normalized) && normalized.length === 0) return null;
+            return { role, content: normalized };
+        }
+
+        function normalizeContent(content)
+        {
+            if (typeof content === 'string') return content;
+            if (!Array.isArray(content))
+            {
+                return typeof content === 'undefined' || content === null ? '' : String(content);
+            }
+
+            const parts = [];
+            content.forEach((part) =>
+            {
+                if (!part) return;
+                if (typeof part === 'string')
+                {
+                    parts.push({ type: 'text', text: part });
+                    return;
+                }
+                if (part.type === 'text')
+                {
+                    parts.push({ type: 'text', text: String(part.text || '') });
+                    return;
+                }
+                if (part.type === 'image_url')
+                {
+                    const url = typeof part.image_url === 'string' ? part.image_url : part.image_url?.url;
+                    if (url) parts.push({ type: 'image_url', image_url: { url } });
+                    return;
+                }
+                if (part.type === 'image' || part.dataUrl)
+                {
+                    const url = part.dataUrl || part.url || part.src;
+                    if (url) parts.push({ type: 'image_url', image_url: { url } });
+                }
             });
-
-        } catch (error) {
-            dropdown.innerHTML = `<div class="model-option error">获取失败: ${error.message}<br>请检查 URL 和 Key</div>`;
+            return parts;
         }
-    }
 
-    function debounce(func, wait) {
-        let timeout;
-        return function(...args) {
-            clearTimeout(timeout);
-            timeout = setTimeout(() => func.apply(this, args), wait);
-        };
-    }
-
-    let renderPromise = Promise.resolve();
-
-    const updatePreview = debounce(function() {
-        const text = userInput.value;
-        if (!text.trim()) {
-            previewArea.classList.remove('show');
-            return;
+        function restoreConversation(messages, options = {})
+        {
+            messageHistory = messages.map((msg) => ({ role: msg.role, content: cloneContent(msg.content) }));
+            renderConversation();
+            persistConversation();
+            if (!options.silent) setStatus('对话已加载', 'recording');
         }
-        previewArea.classList.add('show');
-        previewArea.innerHTML = marked.parse(text);
-        renderPromise = renderPromise.then(() => {
-            return MathJax.typesetPromise([previewArea]);
-        }).catch((err) => {
-            console.log('MathJax render error: ', err);
+
+        function cloneContent(content)
+        {
+            return JSON.parse(JSON.stringify(content));
+        }
+
+        function renderConversation()
+        {
+            chatContainer.innerHTML = '';
+            if (!messageHistory.length)
+            {
+                renderGreeting();
+                return;
+            }
+            messageHistory.forEach((msg) => appendMessage(msg.role, msg.content));
+            typesetElement(chatContainer);
+        }
+
+        function exportChat()
+        {
+            if (!messageHistory.length)
+            {
+                alert('暂无对话记录可导出');
+                return;
+            }
+
+            const dataStr = JSON.stringify(buildConversationPayload(), null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `math_chat_export_${formatTimestamp(new Date())}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function clearConversation()
+        {
+            if (!confirm('确定要清空当前对话吗？')) return;
+            messageHistory = [];
+            localStorage.removeItem(STORAGE_KEYS.conversation);
+            clearPendingImages();
+            renderGreeting();
+            setStatus('已清空');
+        }
+
+        function getApiConfigs()
+        {
+            const apiList = document.getElementById('api-list').value.trim();
+            const globalModel = document.getElementById('model-name').value.trim() || defaultModel;
+            const configs = [];
+
+            if (apiList)
+            {
+                apiList.split(/\r?\n/)
+                    .map((line) => line.trim())
+                    .filter((line) => line && !line.startsWith('#'))
+                    .forEach((line) =>
+                    {
+                        const parts = line.includes('|')
+                            ? line.split('|').map((part) => part.trim())
+                            : line.split(',').map((part) => part.trim());
+                        const [url, key, model] = parts;
+                        if (url && key)
+                        {
+                            configs.push({
+                                url: normalizeChatUrl(url),
+                                key,
+                                model: model || globalModel
+                            });
+                        }
+                    });
+            }
+
+            if (!configs.length)
+            {
+                const url = document.getElementById('api-url').value.trim() || defaultUrl;
+                const key = document.getElementById('api-key').value.trim();
+                if (key)
+                {
+                    configs.push({
+                        url: normalizeChatUrl(url),
+                        key,
+                        model: globalModel
+                    });
+                }
+            }
+
+            return configs;
+        }
+
+        function normalizeChatUrl(url)
+        {
+            let apiUrl = (url || defaultUrl).trim();
+            if (apiUrl.endsWith('/')) apiUrl = apiUrl.slice(0, -1);
+            if (!apiUrl.endsWith('/chat/completions')) apiUrl += '/chat/completions';
+            return apiUrl;
+        }
+
+        async function fetchAndShowModels(event)
+        {
+            event.stopPropagation();
+            const dropdown = document.getElementById('model-dropdown');
+            const configs = getApiConfigs();
+            const config = configs[apiRoundRobinIndex % Math.max(configs.length, 1)] || configs[0];
+
+            if (dropdown.classList.contains('show'))
+            {
+                dropdown.classList.remove('show');
+                return;
+            }
+
+            if (!config)
+            {
+                alert('请先填写 API Key 或多 API 轮询列表');
+                return;
+            }
+
+            dropdown.classList.add('show');
+            dropdown.innerHTML = '<div class="model-option loading">正在获取模型列表...</div>';
+
+            try
+            {
+                const modelsUrl = config.url.replace(/\/chat\/completions$/, '/models');
+                const response = await fetch(modelsUrl, {
+                    method: 'GET',
+                    headers: {
+                        Authorization: `Bearer ${config.key}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const data = await response.json();
+                const models = Array.isArray(data.data) ? data.data : (Array.isArray(data) ? data : []);
+                models.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+                dropdown.innerHTML = '';
+
+                if (!models.length)
+                {
+                    dropdown.innerHTML = '<div class="model-option error">未找到模型</div>';
+                    return;
+                }
+
+                models.forEach((model) =>
+                {
+                    const div = document.createElement('div');
+                    div.className = 'model-option';
+                    div.textContent = model.id;
+                    div.onclick = () =>
+                    {
+                        document.getElementById('model-name').value = model.id;
+                        dropdown.classList.remove('show');
+                    };
+                    dropdown.appendChild(div);
+                });
+            } catch (error)
+            {
+                dropdown.innerHTML = `<div class="model-option error">获取失败: ${escapeHtml(error.message)}<br>请检查 URL 和 Key</div>`;
+            }
+        }
+
+        userInput.addEventListener('input', function ()
+        {
+            this.style.height = 'auto';
+            this.style.height = `${this.scrollHeight}px`;
+            if (this.value === '') this.style.height = '44px';
+            updatePreview();
         });
 
-    }, 300);
+        userInput.addEventListener('keydown', function (event)
+        {
+            if (event.key === 'Enter' && !event.shiftKey)
+            {
+                event.preventDefault();
+                sendMessage();
+            }
+        });
 
-    userInput.addEventListener('input', function() {
-        this.style.height = 'auto';
-        this.style.height = (this.scrollHeight) + 'px';
-        if(this.value === '') this.style.height = '44px';
-        updatePreview();
-    });
+        const updatePreview = debounce(function ()
+        {
+            const text = userInput.value;
+            if (!text.trim())
+            {
+                previewArea.classList.remove('show');
+                previewArea.innerHTML = '';
+                return;
+            }
+            previewArea.classList.add('show');
+            previewArea.innerHTML = sanitizeHtml(renderMarkdown(text));
+            typesetElement(previewArea);
+        }, 250);
 
-    userInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            sendMessage();
+        async function handleImageUpload(input)
+        {
+            const files = Array.from(input.files || []);
+            if (!files.length) return;
+
+            for (const file of files)
+            {
+                if (!file.type.startsWith('image/'))
+                {
+                    alert(`${file.name} 不是图片文件`);
+                    continue;
+                }
+                if (file.size > maxImageBytes)
+                {
+                    alert(`${file.name} 超过 8MB，已跳过`);
+                    continue;
+                }
+                const dataUrl = await readFileAsDataUrl(file);
+                pendingImages.push({
+                    name: file.name,
+                    type: file.type,
+                    size: file.size,
+                    dataUrl
+                });
+            }
+            input.value = '';
+            renderAttachmentTray();
         }
-    });
 
-    async function sendMessage() {
-        const text = userInput.value.trim();
-        const apiKey = document.getElementById('api-key').value.trim();
-        let apiUrl = document.getElementById('api-url').value.trim() || defaultUrl;
-        const model = document.getElementById('model-name').value.trim() || defaultModel;
+        function readFileAsDataUrl(file)
+        {
+            return new Promise((resolve, reject) =>
+            {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(reader.error || new Error('图片读取失败'));
+                reader.readAsDataURL(file);
+            });
+        }
 
-        if (!text) return;
-        if (!apiKey) { alert('请点击顶部设置填写 API Key'); toggleSettings(); return; }
+        function renderAttachmentTray()
+        {
+            attachmentTray.innerHTML = '';
+            attachmentTray.classList.toggle('show', pendingImages.length > 0);
+            pendingImages.forEach((image, index) =>
+            {
+                const item = document.createElement('div');
+                item.className = 'attachment-thumb';
+                const img = document.createElement('img');
+                img.src = image.dataUrl;
+                img.alt = image.name || `图片 ${index + 1}`;
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.textContent = '×';
+                removeBtn.title = '移除图片';
+                removeBtn.onclick = () =>
+                {
+                    pendingImages.splice(index, 1);
+                    renderAttachmentTray();
+                };
+                item.appendChild(img);
+                item.appendChild(removeBtn);
+                attachmentTray.appendChild(item);
+            });
+        }
 
-        if (apiUrl.endsWith('/')) apiUrl = apiUrl.slice(0, -1);
-        if (!apiUrl.endsWith('/chat/completions')) apiUrl += '/chat/completions';
+        function clearPendingImages()
+        {
+            pendingImages = [];
+            renderAttachmentTray();
+        }
 
-        appendMessage('user', text); // 用户消息直接显示文本，appendMessage 内部会处理
-        
-        userInput.value = '';
-        userInput.style.height = '44px';
-        previewArea.classList.remove('show');
-        previewArea.innerHTML = '';
-        
-        messageHistory.push({ role: "user", content: text });
-        
-        await writeToFile();
+        function buildUserContent(text, images)
+        {
+            if (!images.length) return text;
+            const parts = [];
+            if (text) parts.push({ type: 'text', text });
+            images.forEach((image) =>
+            {
+                parts.push({
+                    type: 'image_url',
+                    image_url: { url: image.dataUrl }
+                });
+            });
+            return parts;
+        }
 
-        const aiMessageDiv = appendMessage('ai', '<span class="typing">思考中...</span>');
-        const sendBtn = document.getElementById('send-btn');
-        sendBtn.disabled = true;
+        async function sendMessage()
+        {
+            const text = userInput.value.trim();
+            const images = pendingImages.slice();
+            const apiConfigs = getApiConfigs();
 
-        let fullText = "";
+            if (!text && !images.length) return;
+            if (!apiConfigs.length)
+            {
+                alert('请点击顶部设置填写 API Key，或添加多 API 轮询列表');
+                if (!document.getElementById('settings-panel').classList.contains('show')) toggleSettings();
+                return;
+            }
 
-        try {
-            const response = await fetch(apiUrl, {
+            const userContent = buildUserContent(text, images);
+            messageHistory.push({ role: 'user', content: userContent });
+            appendMessage('user', userContent);
+            persistConversation();
+
+            userInput.value = '';
+            userInput.style.height = '44px';
+            previewArea.classList.remove('show');
+            previewArea.innerHTML = '';
+            clearPendingImages();
+
+            const aiMessageDiv = appendMessage('assistant', '<span class="typing">思考中...</span>', { rawHtml: true });
+            const sendBtn = document.getElementById('send-btn');
+            sendBtn.disabled = true;
+
+            let fullText = '';
+            const errors = [];
+            const startIndex = apiRoundRobinIndex % apiConfigs.length;
+
+            try
+            {
+                for (let attempt = 0; attempt < apiConfigs.length; attempt++)
+                {
+                    const index = (startIndex + attempt) % apiConfigs.length;
+                    const config = apiConfigs[index];
+                    try
+                    {
+                        setStatus(`API ${index + 1}/${apiConfigs.length}`);
+                        fullText = await requestChatCompletion(config, aiMessageDiv);
+                        messageHistory.push({ role: 'assistant', content: fullText });
+                        apiRoundRobinIndex = (index + 1) % apiConfigs.length;
+                        localStorage.setItem(STORAGE_KEYS.apiIndex, String(apiRoundRobinIndex));
+                        persistConversation();
+                        aiMessageDiv.innerHTML = sanitizeHtml(renderMarkdown(fullText));
+                        typesetElement(aiMessageDiv);
+                        setStatus(`已使用 API ${index + 1}`, 'recording');
+                        return;
+                    } catch (error)
+                    {
+                        errors.push(`API ${index + 1}: ${error.message}`);
+                    }
+                }
+                throw new Error(errors.join('；'));
+            } catch (error)
+            {
+                aiMessageDiv.innerHTML = `<span style="color:#b91c1c">Error: ${escapeHtml(error.message)}</span>`;
+                setStatus('请求失败');
+            } finally
+            {
+                sendBtn.disabled = false;
+            }
+        }
+
+        async function requestChatCompletion(config, targetDiv)
+        {
+            const response = await fetch(config.url, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-                body: JSON.stringify({ model: model, messages: messageHistory, stream: true })
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${config.key}`
+                },
+                body: JSON.stringify({
+                    model: config.model || defaultModel,
+                    messages: messageHistory,
+                    stream: true
+                })
             });
 
-            if (!response.ok) throw new Error((await response.json()).error?.message || '请求失败');
+            if (!response.ok)
+            {
+                throw new Error(await readApiError(response));
+            }
+
+            if (!response.body)
+            {
+                const data = await response.json();
+                return data.choices?.[0]?.message?.content || '';
+            }
 
             const reader = response.body.getReader();
-            const decoder = new TextDecoder("utf-8");
-            aiMessageDiv.innerHTML = "";
+            const decoder = new TextDecoder('utf-8');
+            let buffer = '';
+            let fullText = '';
 
-            while (true) {
+            while (true)
+            {
                 const { done, value } = await reader.read();
                 if (done) break;
-                const chunk = decoder.decode(value, { stream: true });
-                const lines = chunk.split('\n');
-                
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        const jsonStr = line.slice(6);
-                        if (jsonStr === '[DONE]') break;
-                        try {
-                            const content = JSON.parse(jsonStr).choices[0]?.delta?.content || "";
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split(/\r?\n/);
+                buffer = lines.pop() || '';
+
+                for (const rawLine of lines)
+                {
+                    const line = rawLine.trim();
+                    if (!line || !line.startsWith('data:')) continue;
+                    const jsonStr = line.slice(5).trim();
+                    if (jsonStr === '[DONE]') return fullText;
+                    try
+                    {
+                        const data = JSON.parse(jsonStr);
+                        const content = data.choices?.[0]?.delta?.content || data.choices?.[0]?.message?.content || '';
+                        if (content)
+                        {
                             fullText += content;
-                            aiMessageDiv.innerText = fullText;
+                            targetDiv.textContent = fullText;
                             chatContainer.scrollTop = chatContainer.scrollHeight;
-                        } catch (e) {}
+                        }
+                    } catch (err)
+                    {
+                        console.warn('跳过无法解析的流式片段:', jsonStr);
                     }
                 }
             }
 
-            messageHistory.push({ role: "assistant", content: fullText });
-            
-            await writeToFile();
+            return fullText;
+        }
 
-            aiMessageDiv.innerHTML = marked.parse(fullText);
-            MathJax.typesetPromise([aiMessageDiv]).then(() => {
-                chatContainer.scrollTop = chatContainer.scrollHeight;
+        async function readApiError(response)
+        {
+            const fallback = `HTTP ${response.status}`;
+            try
+            {
+                const data = await response.json();
+                return data.error?.message || data.message || fallback;
+            } catch (err)
+            {
+                return fallback;
+            }
+        }
+
+        function appendMessage(role, content, options = {})
+        {
+            const div = document.createElement('div');
+            const cssRole = role === 'assistant' ? 'ai' : role;
+            div.className = `message ${cssRole}`;
+            if (options.rawHtml)
+            {
+                div.innerHTML = content;
+            } else
+            {
+                div.innerHTML = renderMessageContent(role, content);
+            }
+            chatContainer.appendChild(div);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            typesetElement(div);
+            return div;
+        }
+
+        function renderMessageContent(role, content)
+        {
+            if (role === 'assistant')
+            {
+                return sanitizeHtml(renderMarkdown(String(content || '')));
+            }
+
+            if (role === 'system')
+            {
+                return escapeHtml(stringifyContent(content)).replace(/\n/g, '<br>');
+            }
+
+            const { text, images } = splitMessageContent(content);
+            const textHtml = escapeHtml(text).replace(/\n/g, '<br>');
+            const imagesHtml = images.length
+                ? `<div class="message-images">${images.map((url, index) => `<img class="message-image" src="${escapeAttribute(url)}" alt="上传图片 ${index + 1}">`).join('')}</div>`
+                : '';
+            return `${textHtml}${imagesHtml}`;
+        }
+
+        function splitMessageContent(content)
+        {
+            if (typeof content === 'string') return { text: content, images: [] };
+            const result = { text: '', images: [] };
+            if (!Array.isArray(content)) return { text: String(content || ''), images: [] };
+            content.forEach((part) =>
+            {
+                if (part?.type === 'text') result.text += part.text || '';
+                if (part?.type === 'image_url')
+                {
+                    const url = typeof part.image_url === 'string' ? part.image_url : part.image_url?.url;
+                    if (url) result.images.push(url);
+                }
             });
-
-        } catch (error) {
-            aiMessageDiv.innerHTML = `<span style="color:red">Error: ${error.message}</span>`;
-        } finally {
-            sendBtn.disabled = false;
+            return result;
         }
-    }
 
-    function appendMessage(role, html) {
-        const div = document.createElement('div');
-        div.className = `message ${role}`;
-        div.innerHTML = html;
-        chatContainer.appendChild(div);
-        chatContainer.scrollTop = chatContainer.scrollHeight;
-        // 仅对用户消息进行 MathJax 渲染（AI 消息在流式传输结束后统一渲染）
-        if (role === 'user') {
-             MathJax.typesetPromise([div]);
+        function stringifyContent(content)
+        {
+            if (typeof content === 'string') return content;
+            const { text } = splitMessageContent(content);
+            return text || JSON.stringify(content);
         }
-        return div;
-    }
-</script>
 
+        function renderMarkdown(text)
+        {
+            if (!window.marked) return escapeHtml(text).replace(/\n/g, '<br>');
+            return marked.parse(text || '');
+        }
+
+        function sanitizeHtml(html)
+        {
+            const template = document.createElement('template');
+            template.innerHTML = html;
+            template.content.querySelectorAll('script, iframe, object, embed').forEach((node) => node.remove());
+            template.content.querySelectorAll('*').forEach((node) =>
+            {
+                Array.from(node.attributes).forEach((attr) =>
+                {
+                    const name = attr.name.toLowerCase();
+                    const value = attr.value.trim().toLowerCase();
+                    if (name.startsWith('on') || value.startsWith('javascript:'))
+                    {
+                        node.removeAttribute(attr.name);
+                    }
+                });
+            });
+            return template.innerHTML;
+        }
+
+        function typesetElement(element)
+        {
+            if (!window.MathJax?.typesetPromise) return;
+            renderPromise = renderPromise
+                .then(() => MathJax.typesetPromise([element]))
+                .then(() => { chatContainer.scrollTop = chatContainer.scrollHeight; })
+                .catch((err) => console.warn('MathJax render error:', err));
+        }
+
+        async function syncToNutstore()
+        {
+            try
+            {
+                saveSettings();
+                await putNutstoreFile(JSON.stringify(buildConversationPayload(), null, 2));
+                setStatus('已同步到坚果云', 'recording');
+                alert('已同步到坚果云');
+            } catch (err)
+            {
+                console.error(err);
+                setStatus('坚果云同步失败');
+                alert('同步到坚果云失败: ' + err.message);
+            }
+        }
+
+        async function syncFromNutstore()
+        {
+            try
+            {
+                saveSettings();
+                const text = await getNutstoreFile();
+                const payload = JSON.parse(text);
+                const messages = parseConversationPayload(payload);
+                if (!messages.length) throw new Error('远端文件没有可加载的消息');
+                restoreConversation(messages);
+                setStatus('已从坚果云拉取', 'recording');
+                alert(`已从坚果云拉取 ${messages.length} 条消息`);
+            } catch (err)
+            {
+                console.error(err);
+                setStatus('坚果云拉取失败');
+                alert('从坚果云拉取失败: ' + err.message);
+            }
+        }
+
+        function scheduleAutoSync()
+        {
+            if (!document.getElementById('nutstore-auto').checked) return;
+            const config = getNutstoreConfig();
+            if (!config.url || !config.user || !config.pass || !config.path) return;
+            clearTimeout(autoSyncTimer);
+            autoSyncTimer = setTimeout(() =>
+            {
+                putNutstoreFile(JSON.stringify(buildConversationPayload(), null, 2))
+                    .then(() => setStatus('已自动同步', 'recording'))
+                    .catch((err) => console.warn('自动同步失败:', err));
+            }, 1200);
+        }
+
+        function getNutstoreConfig()
+        {
+            return {
+                url: document.getElementById('nutstore-url').value.trim() || defaultNutstoreUrl,
+                user: document.getElementById('nutstore-user').value.trim(),
+                pass: document.getElementById('nutstore-pass').value.trim(),
+                path: document.getElementById('nutstore-path').value.trim() || defaultNutstorePath
+            };
+        }
+
+        function buildNutstoreUrl(config, pathOverride)
+        {
+            const base = config.url.replace(/\/+$/, '');
+            const path = (pathOverride || config.path).replace(/^\/+/, '');
+            const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+            return `${base}/${encodedPath}`;
+        }
+
+        function getNutstoreHeaders(config)
+        {
+            if (!config.user || !config.pass)
+            {
+                throw new Error('请填写坚果云账号和应用密码');
+            }
+            return {
+                Authorization: `Basic ${btoa(unescape(encodeURIComponent(`${config.user}:${config.pass}`)))}`
+            };
+        }
+
+        async function ensureNutstoreFolders(config, headers)
+        {
+            const parts = config.path.replace(/^\/+/, '').split('/').filter(Boolean);
+            parts.pop();
+            let current = '';
+            for (const part of parts)
+            {
+                current += `/${part}`;
+                const response = await fetch(buildNutstoreUrl(config, current), {
+                    method: 'MKCOL',
+                    headers
+                });
+                if (![200, 201, 204, 405, 409].includes(response.status))
+                {
+                    throw new Error(`创建远端目录失败: HTTP ${response.status}`);
+                }
+            }
+        }
+
+        async function putNutstoreFile(content)
+        {
+            const config = getNutstoreConfig();
+            const headers = getNutstoreHeaders(config);
+            await ensureNutstoreFolders(config, headers);
+            const response = await fetch(buildNutstoreUrl(config), {
+                method: 'PUT',
+                headers: {
+                    ...headers,
+                    'Content-Type': 'application/json; charset=utf-8'
+                },
+                body: content
+            });
+            if (!response.ok)
+            {
+                throw new Error(`HTTP ${response.status}`);
+            }
+        }
+
+        async function getNutstoreFile()
+        {
+            const config = getNutstoreConfig();
+            const headers = getNutstoreHeaders(config);
+            const response = await fetch(buildNutstoreUrl(config), {
+                method: 'GET',
+                headers
+            });
+            if (!response.ok)
+            {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return response.text();
+        }
+
+        function setupMcpBridge()
+        {
+            window.MathChatMCP = {
+                version: '1.0.0',
+                tools: [
+                    'chat.export',
+                    'chat.import',
+                    'chat.clear',
+                    'nutstore.pull',
+                    'nutstore.push',
+                    'config.get',
+                    'config.setNutstore'
+                ],
+                async call(method, params = {})
+                {
+                    switch (method)
+                    {
+                        case 'chat.export':
+                            return buildConversationPayload();
+                        case 'chat.import':
+                            restoreConversation(parseConversationPayload(params.payload || params.messages || []));
+                            return { ok: true, count: messageHistory.length };
+                        case 'chat.clear':
+                            messageHistory = [];
+                            persistConversation();
+                            renderGreeting();
+                            return { ok: true };
+                        case 'nutstore.pull':
+                            await syncFromNutstore();
+                            return { ok: true, count: messageHistory.length };
+                        case 'nutstore.push':
+                            await syncToNutstore();
+                            return { ok: true, count: messageHistory.length };
+                        case 'config.get':
+                            return {
+                                apiCount: getApiConfigs().length,
+                                nutstore: { ...getNutstoreConfig(), pass: getNutstoreConfig().pass ? '***' : '' }
+                            };
+                        case 'config.setNutstore':
+                            if (params.url) document.getElementById('nutstore-url').value = params.url;
+                            if (params.user) document.getElementById('nutstore-user').value = params.user;
+                            if (params.pass) document.getElementById('nutstore-pass').value = params.pass;
+                            if (params.path) document.getElementById('nutstore-path').value = params.path;
+                            saveSettings();
+                            return { ok: true };
+                        default:
+                            throw new Error(`Unknown MCP method: ${method}`);
+                    }
+                },
+                async handle(request)
+                {
+                    const id = request?.id ?? null;
+                    try
+                    {
+                        const result = await this.call(request.method, request.params || {});
+                        return { jsonrpc: '2.0', id, result };
+                    } catch (err)
+                    {
+                        return { jsonrpc: '2.0', id, error: { code: -32000, message: err.message } };
+                    }
+                }
+            };
+        }
+
+        function debounce(func, wait)
+        {
+            let timeout;
+            return function (...args)
+            {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), wait);
+            };
+        }
+
+        function escapeHtml(text)
+        {
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function escapeAttribute(text)
+        {
+            return escapeHtml(text).replace(/`/g, '&#096;');
+        }
+
+        function formatTimestamp(date)
+        {
+            return date.toISOString().slice(0, 19).replace(/[-T:]/g, '');
+        }
+    </script>
 </body>
+
 </html>
