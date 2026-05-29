@@ -313,8 +313,129 @@
             color: #86efac;
         }
 
+        .app-main {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .conversation-sidebar {
+            width: 280px;
+            min-width: 240px;
+            max-width: 34vw;
+            background: #ffffff;
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .conversation-sidebar-header {
+            padding: 12px;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .conversation-sidebar-title {
+            color: #1f2937;
+            font-size: 0.95rem;
+            font-weight: 800;
+        }
+
+        .conversation-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .side-btn {
+            flex: 1;
+            border: 1px solid #cbd5e1;
+            background: #f8fafc;
+            color: #334155;
+            border-radius: 6px;
+            min-height: 34px;
+            cursor: pointer;
+            font-weight: 700;
+        }
+
+        .side-btn:hover {
+            background: #eef2f7;
+        }
+
+        .conversation-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .conversation-item {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            background: #ffffff;
+            padding: 9px;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 6px;
+            cursor: pointer;
+        }
+
+        .conversation-item:hover {
+            background: #f8fafc;
+        }
+
+        .conversation-item.active {
+            border-color: var(--primary-color);
+            background: #eef6ff;
+        }
+
+        .conversation-item-title {
+            color: #111827;
+            font-size: 0.9rem;
+            font-weight: 750;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .conversation-item-meta {
+            color: var(--text-muted);
+            font-size: 0.74rem;
+            grid-column: 1 / -1;
+        }
+
+        .conversation-delete {
+            width: 24px;
+            height: 24px;
+            border: 0;
+            border-radius: 50%;
+            background: transparent;
+            color: #64748b;
+            cursor: pointer;
+            font-size: 1rem;
+            line-height: 1;
+        }
+
+        .conversation-delete:hover {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+
+        .conversation-empty {
+            color: var(--text-muted);
+            font-size: 0.84rem;
+            line-height: 1.5;
+            padding: 12px;
+        }
+
         #chat-container {
             flex: 1;
+            min-width: 0;
             overflow-y: auto;
             padding: 15px;
             display: flex;
@@ -577,6 +698,23 @@
         }
 
         @media (max-width: 640px) {
+            .app-main {
+                flex-direction: column;
+            }
+
+            .conversation-sidebar {
+                width: 100%;
+                max-width: none;
+                min-width: 0;
+                max-height: 34vh;
+                border-right: 0;
+                border-bottom: 1px solid var(--border-color);
+            }
+
+            .conversation-sidebar-header {
+                padding: 10px;
+            }
+
             .settings-group {
                 min-width: 100%;
             }
@@ -666,13 +804,27 @@
             <input type="file" id="import-file" accept=".json,application/json" style="display:none" onchange="handleFileImport(this)">
             <button class="action-btn import-btn" onclick="document.getElementById('import-file').click()">加载对话</button>
             <button class="action-btn export-btn" onclick="exportChat()">导出对话</button>
+            <button class="action-btn sync-btn" onclick="testNutstoreConnection()">检测坚果云连接</button>
             <button class="action-btn sync-btn" onclick="syncFromNutstore()">从坚果云拉取</button>
             <button class="action-btn sync-btn" onclick="syncToNutstore()">同步到坚果云</button>
             <button class="action-btn danger-btn" onclick="clearConversation()">清空当前对话</button>
         </div>
     </div>
 
-    <div id="chat-container"></div>
+    <div class="app-main">
+        <aside class="conversation-sidebar">
+            <div class="conversation-sidebar-header">
+                <div class="conversation-sidebar-title">已保存对话</div>
+                <div class="conversation-actions">
+                    <button class="side-btn" onclick="newConversation()">新建</button>
+                    <button class="side-btn" onclick="saveCurrentConversation()">保存当前</button>
+                </div>
+            </div>
+            <div id="conversation-list" class="conversation-list"></div>
+        </aside>
+
+        <div id="chat-container"></div>
+    </div>
 
     <div class="bottom-section">
         <div id="math-preview" class="math-preview-area"></div>
@@ -698,6 +850,8 @@
             modelName: 'model_name',
             apiList: 'api_list',
             conversation: 'math_chat_conversation_v2',
+            conversations: 'math_chat_saved_conversations_v1',
+            activeConversationId: 'math_chat_active_conversation_id',
             apiIndex: 'math_chat_api_index',
             nutstoreUrl: 'nutstore_url',
             nutstoreUser: 'nutstore_user',
@@ -759,11 +913,13 @@
         ];
 
         const chatContainer = document.getElementById('chat-container');
+        const conversationList = document.getElementById('conversation-list');
         const userInput = document.getElementById('user-input');
         const previewArea = document.getElementById('math-preview');
         const attachmentTray = document.getElementById('attachment-tray');
 
         let messageHistory = [];
+        let currentConversationId = localStorage.getItem(STORAGE_KEYS.activeConversationId) || '';
         let pendingImages = [];
         let fileHandle = null;
         let isAutoSaveActive = false;
@@ -923,6 +1079,8 @@
             return {
                 version: 2,
                 app: 'Math AI Chat',
+                id: currentConversationId,
+                title: getConversationTitle(messageHistory),
                 exportedAt: new Date().toISOString(),
                 messages: messageHistory
             };
@@ -930,6 +1088,7 @@
 
         function persistConversation()
         {
+            saveConversationToLibrary();
             localStorage.setItem(STORAGE_KEYS.conversation, JSON.stringify(buildConversationPayload()));
             writeToFile();
             scheduleAutoSync();
@@ -937,10 +1096,27 @@
 
         function loadConversationFromCache()
         {
+            migrateLegacyConversation();
+            renderConversationList();
+            const saved = getSavedConversations();
+            const active = saved.find((item) => item.id === currentConversationId) || saved[0];
+            if (active)
+            {
+                currentConversationId = active.id;
+                localStorage.setItem(STORAGE_KEYS.activeConversationId, currentConversationId);
+                messageHistory = active.messages.map((msg) => ({ role: msg.role, content: cloneContent(msg.content) }));
+                renderConversation();
+                renderConversationList();
+                return;
+            }
+
             const raw = localStorage.getItem(STORAGE_KEYS.conversation);
             if (!raw)
             {
+                currentConversationId = createConversationId();
+                localStorage.setItem(STORAGE_KEYS.activeConversationId, currentConversationId);
                 renderGreeting();
+                renderConversationList();
                 return;
             }
 
@@ -958,6 +1134,199 @@
             }
 
             renderGreeting();
+            renderConversationList();
+        }
+
+        function getSavedConversations()
+        {
+            try
+            {
+                const parsed = JSON.parse(localStorage.getItem(STORAGE_KEYS.conversations) || '[]');
+                return Array.isArray(parsed) ? parsed.filter((item) => item && item.id && Array.isArray(item.messages)) : [];
+            } catch (err)
+            {
+                console.warn('保存对话列表读取失败:', err);
+                return [];
+            }
+        }
+
+        function setSavedConversations(conversations)
+        {
+            localStorage.setItem(STORAGE_KEYS.conversations, JSON.stringify(conversations));
+        }
+
+        function saveConversationToLibrary()
+        {
+            if (!currentConversationId)
+            {
+                currentConversationId = createConversationId();
+                localStorage.setItem(STORAGE_KEYS.activeConversationId, currentConversationId);
+            }
+
+            const conversations = getSavedConversations();
+            const now = new Date().toISOString();
+            const existing = conversations.find((item) => item.id === currentConversationId);
+            const record = {
+                id: currentConversationId,
+                title: getConversationTitle(messageHistory),
+                createdAt: existing?.createdAt || now,
+                updatedAt: now,
+                messages: messageHistory.map((msg) => ({ role: msg.role, content: cloneContent(msg.content) }))
+            };
+
+            const next = [record, ...conversations.filter((item) => item.id !== currentConversationId)]
+                .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
+                .slice(0, 80);
+            setSavedConversations(next);
+            renderConversationList();
+        }
+
+        function migrateLegacyConversation()
+        {
+            const saved = getSavedConversations();
+            if (saved.length) return;
+            const raw = localStorage.getItem(STORAGE_KEYS.conversation);
+            if (!raw) return;
+
+            try
+            {
+                const messages = parseConversationPayload(JSON.parse(raw));
+                if (!messages.length) return;
+                currentConversationId = currentConversationId || createConversationId();
+                localStorage.setItem(STORAGE_KEYS.activeConversationId, currentConversationId);
+                setSavedConversations([{
+                    id: currentConversationId,
+                    title: getConversationTitle(messages),
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    messages
+                }]);
+            } catch (err)
+            {
+                console.warn('旧对话迁移失败:', err);
+            }
+        }
+
+        function renderConversationList()
+        {
+            if (!conversationList) return;
+            const conversations = getSavedConversations();
+            conversationList.innerHTML = '';
+
+            if (!conversations.length)
+            {
+                const empty = document.createElement('div');
+                empty.className = 'conversation-empty';
+                empty.textContent = '还没有保存的对话。发送消息、导入文件或点击“保存当前”后会出现在这里。';
+                conversationList.appendChild(empty);
+                return;
+            }
+
+            conversations.forEach((conversation) =>
+            {
+                const item = document.createElement('div');
+                item.className = `conversation-item ${conversation.id === currentConversationId ? 'active' : ''}`;
+                item.onclick = () => loadSavedConversation(conversation.id);
+
+                const title = document.createElement('div');
+                title.className = 'conversation-item-title';
+                title.textContent = conversation.title || '未命名对话';
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.type = 'button';
+                deleteBtn.className = 'conversation-delete';
+                deleteBtn.textContent = '×';
+                deleteBtn.title = '删除对话';
+                deleteBtn.onclick = (event) =>
+                {
+                    event.stopPropagation();
+                    deleteSavedConversation(conversation.id);
+                };
+
+                const meta = document.createElement('div');
+                meta.className = 'conversation-item-meta';
+                meta.textContent = `${conversation.messages.length} 条消息 · ${formatShortTime(conversation.updatedAt)}`;
+
+                item.appendChild(title);
+                item.appendChild(deleteBtn);
+                item.appendChild(meta);
+                conversationList.appendChild(item);
+            });
+        }
+
+        function loadSavedConversation(id)
+        {
+            const conversation = getSavedConversations().find((item) => item.id === id);
+            if (!conversation) return;
+            currentConversationId = conversation.id;
+            localStorage.setItem(STORAGE_KEYS.activeConversationId, currentConversationId);
+            messageHistory = conversation.messages.map((msg) => ({ role: msg.role, content: cloneContent(msg.content) }));
+            localStorage.setItem(STORAGE_KEYS.conversation, JSON.stringify(buildConversationPayload()));
+            clearPendingImages();
+            renderConversation();
+            renderConversationList();
+            setStatus('已切换对话', 'recording');
+        }
+
+        function deleteSavedConversation(id)
+        {
+            if (!confirm('确定要删除这条保存的对话吗？')) return;
+            const conversations = getSavedConversations().filter((item) => item.id !== id);
+            setSavedConversations(conversations);
+            if (id === currentConversationId)
+            {
+                const next = conversations[0];
+                if (next)
+                {
+                    loadSavedConversation(next.id);
+                } else
+                {
+                    currentConversationId = createConversationId();
+                    localStorage.setItem(STORAGE_KEYS.activeConversationId, currentConversationId);
+                    messageHistory = [];
+                    localStorage.removeItem(STORAGE_KEYS.conversation);
+                    renderGreeting();
+                    renderConversationList();
+                }
+            } else
+            {
+                renderConversationList();
+            }
+            setStatus('已删除对话');
+        }
+
+        function newConversation()
+        {
+            if (messageHistory.length) saveConversationToLibrary();
+            currentConversationId = createConversationId();
+            localStorage.setItem(STORAGE_KEYS.activeConversationId, currentConversationId);
+            messageHistory = [];
+            localStorage.removeItem(STORAGE_KEYS.conversation);
+            clearPendingImages();
+            renderGreeting();
+            renderConversationList();
+            setStatus('新对话');
+            userInput.focus();
+        }
+
+        function saveCurrentConversation()
+        {
+            saveConversationToLibrary();
+            localStorage.setItem(STORAGE_KEYS.conversation, JSON.stringify(buildConversationPayload()));
+            setStatus('当前对话已保存', 'recording');
+        }
+
+        function createConversationId()
+        {
+            return `conv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        }
+
+        function getConversationTitle(messages)
+        {
+            const firstUser = messages.find((msg) => msg.role === 'user');
+            const text = stringifyContent(firstUser?.content || '').replace(/\s+/g, ' ').trim();
+            if (text) return text.slice(0, 32);
+            return `新对话 ${formatShortTime(new Date().toISOString())}`;
         }
 
         function renderGreeting()
@@ -1069,6 +1438,11 @@
 
         function restoreConversation(messages, options = {})
         {
+            if (!options.keepCurrentId)
+            {
+                currentConversationId = options.id || createConversationId();
+                localStorage.setItem(STORAGE_KEYS.activeConversationId, currentConversationId);
+            }
             messageHistory = messages.map((msg) => ({ role: msg.role, content: cloneContent(msg.content) }));
             renderConversation();
             persistConversation();
@@ -1077,6 +1451,7 @@
 
         function cloneContent(content)
         {
+            if (typeof content === 'undefined') return '';
             return JSON.parse(JSON.stringify(content));
         }
 
@@ -1117,6 +1492,7 @@
             if (!confirm('确定要清空当前对话吗？')) return;
             messageHistory = [];
             localStorage.removeItem(STORAGE_KEYS.conversation);
+            saveConversationToLibrary();
             clearPendingImages();
             renderGreeting();
             setStatus('已清空');
@@ -1610,7 +1986,7 @@
             {
                 console.error(err);
                 setStatus('坚果云同步失败');
-                alert('同步到坚果云失败: ' + err.message);
+                alert('同步到坚果云失败: ' + formatNutstoreError(err));
             }
         }
 
@@ -1630,7 +2006,23 @@
             {
                 console.error(err);
                 setStatus('坚果云拉取失败');
-                alert('从坚果云拉取失败: ' + err.message);
+                alert('从坚果云拉取失败: ' + formatNutstoreError(err));
+            }
+        }
+
+        async function testNutstoreConnection()
+        {
+            try
+            {
+                saveSettings();
+                const result = await checkNutstoreConnection();
+                setStatus('坚果云连接正常', 'recording');
+                alert(`坚果云连接正常：${result}`);
+            } catch (err)
+            {
+                console.error(err);
+                setStatus('坚果云连接失败');
+                alert('坚果云连接失败: ' + formatNutstoreError(err));
             }
         }
 
@@ -1685,13 +2077,13 @@
             for (const part of parts)
             {
                 current += `/${part}`;
-                const response = await fetch(buildNutstoreUrl(config, current), {
+                const response = await nutstoreFetch(buildNutstoreUrl(config, current), {
                     method: 'MKCOL',
                     headers
-                });
+                }, '创建远端目录');
                 if (![200, 201, 204, 405, 409].includes(response.status))
                 {
-                    throw new Error(`创建远端目录失败: HTTP ${response.status}`);
+                    throw await createNutstoreHttpError(response, '创建远端目录失败');
                 }
             }
         }
@@ -1701,17 +2093,17 @@
             const config = getNutstoreConfig();
             const headers = getNutstoreHeaders(config);
             await ensureNutstoreFolders(config, headers);
-            const response = await fetch(buildNutstoreUrl(config), {
+            const response = await nutstoreFetch(buildNutstoreUrl(config), {
                 method: 'PUT',
                 headers: {
                     ...headers,
                     'Content-Type': 'application/json; charset=utf-8'
                 },
                 body: content
-            });
+            }, '上传坚果云文件');
             if (!response.ok)
             {
-                throw new Error(`HTTP ${response.status}`);
+                throw await createNutstoreHttpError(response, '上传坚果云文件失败');
             }
         }
 
@@ -1719,15 +2111,98 @@
         {
             const config = getNutstoreConfig();
             const headers = getNutstoreHeaders(config);
-            const response = await fetch(buildNutstoreUrl(config), {
+            const response = await nutstoreFetch(buildNutstoreUrl(config), {
                 method: 'GET',
                 headers
-            });
+            }, '读取坚果云文件');
             if (!response.ok)
             {
-                throw new Error(`HTTP ${response.status}`);
+                throw await createNutstoreHttpError(response, '读取坚果云文件失败');
             }
             return response.text();
+        }
+
+        async function checkNutstoreConnection()
+        {
+            const config = getNutstoreConfig();
+            const headers = getNutstoreHeaders(config);
+            const folderPath = getNutstoreParentPath(config.path);
+            const response = await nutstoreFetch(buildNutstoreUrl(config, folderPath), {
+                method: 'PROPFIND',
+                headers: {
+                    ...headers,
+                    Depth: '0',
+                    'Content-Type': 'application/xml; charset=utf-8'
+                },
+                body: '<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/></d:prop></d:propfind>'
+            }, '检测坚果云连接');
+
+            if ([200, 207, 301, 302].includes(response.status))
+            {
+                return `HTTP ${response.status}`;
+            }
+            if (response.status === 404)
+            {
+                return '账号可连接，同步目录尚不存在，推送时会尝试创建';
+            }
+            throw await createNutstoreHttpError(response, '检测坚果云连接失败');
+        }
+
+        function getNutstoreParentPath(path)
+        {
+            const parts = path.replace(/^\/+/, '').split('/').filter(Boolean);
+            parts.pop();
+            return parts.length ? `/${parts.join('/')}` : '/';
+        }
+
+        async function nutstoreFetch(url, options, action)
+        {
+            try
+            {
+                return await fetch(url, options);
+            } catch (err)
+            {
+                const error = new Error(`${action}失败：浏览器无法访问坚果云 WebDAV。`);
+                error.cause = err;
+                error.isNetworkBlocked = true;
+                throw error;
+            }
+        }
+
+        async function createNutstoreHttpError(response, message)
+        {
+            let detail = '';
+            try
+            {
+                detail = (await response.text()).replace(/\s+/g, ' ').trim().slice(0, 160);
+            } catch (err)
+            {
+                detail = '';
+            }
+
+            const error = new Error(`${message}: HTTP ${response.status}${detail ? ` ${detail}` : ''}`);
+            error.status = response.status;
+            return error;
+        }
+
+        function formatNutstoreError(err)
+        {
+            if (err?.isNetworkBlocked || err?.cause instanceof TypeError || /failed to fetch/i.test(err?.message || ''))
+            {
+                return '浏览器无法直接连接坚果云 WebDAV。常见原因是 CORS 跨域拦截、网络不可达或 WebDAV 地址不正确。请先点“检测坚果云连接”；如果仍失败，需要通过 MCP/本地后端/同源代理转发 WebDAV 请求。';
+            }
+
+            if (err?.status === 401 || err?.status === 403)
+            {
+                return `${err.message}。请检查坚果云账号和“第三方应用密码”，不是登录密码。`;
+            }
+
+            if (err?.status === 404)
+            {
+                return `${err.message}。远端文件不存在，可以先使用“同步到坚果云”创建。`;
+            }
+
+            return err?.message || String(err);
         }
 
         function setupMcpBridge()
@@ -1737,7 +2212,12 @@
                 tools: [
                     'chat.export',
                     'chat.import',
+                    'chat.list',
+                    'chat.load',
+                    'chat.delete',
+                    'chat.new',
                     'chat.clear',
+                    'nutstore.test',
                     'nutstore.pull',
                     'nutstore.push',
                     'config.get',
@@ -1752,11 +2232,31 @@
                         case 'chat.import':
                             restoreConversation(parseConversationPayload(params.payload || params.messages || []));
                             return { ok: true, count: messageHistory.length };
+                        case 'chat.list':
+                            return getSavedConversations().map((item) => ({
+                                id: item.id,
+                                title: item.title,
+                                createdAt: item.createdAt,
+                                updatedAt: item.updatedAt,
+                                count: item.messages.length,
+                                active: item.id === currentConversationId
+                            }));
+                        case 'chat.load':
+                            loadSavedConversation(params.id);
+                            return { ok: true, count: messageHistory.length };
+                        case 'chat.delete':
+                            deleteSavedConversation(params.id);
+                            return { ok: true };
+                        case 'chat.new':
+                            newConversation();
+                            return { ok: true, id: currentConversationId };
                         case 'chat.clear':
                             messageHistory = [];
                             persistConversation();
                             renderGreeting();
                             return { ok: true };
+                        case 'nutstore.test':
+                            return { ok: true, result: await checkNutstoreConnection() };
                         case 'nutstore.pull':
                             await syncFromNutstore();
                             return { ok: true, count: messageHistory.length };
@@ -1817,6 +2317,21 @@
         function escapeAttribute(text)
         {
             return escapeHtml(text).replace(/`/g, '&#096;');
+        }
+
+        function formatShortTime(value)
+        {
+            const date = value ? new Date(value) : new Date();
+            if (Number.isNaN(date.getTime())) return '未知时间';
+            const now = new Date();
+            const sameYear = date.getFullYear() === now.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hour = String(date.getHours()).padStart(2, '0');
+            const minute = String(date.getMinutes()).padStart(2, '0');
+            return sameYear
+                ? `${month}-${day} ${hour}:${minute}`
+                : `${date.getFullYear()}-${month}-${day}`;
         }
 
         function formatTimestamp(date)
